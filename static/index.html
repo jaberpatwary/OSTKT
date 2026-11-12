@@ -481,6 +481,12 @@
       el.assistantSelectedPerson.classList.remove('flex');
     }
 
+    function revealAssistantOptions(node) {
+      const wasHidden = node.classList.contains('hidden');
+      node.classList.remove('hidden');
+      if (wasHidden) requestAnimationFrame(() => node.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+    }
+
     function assistantEmployeeQuery(text) {
       let query = text.trim();
       query = query.replace(/^(?:(?:please|create|make|open|submit|new|i need)\s+)*(?:a\s+)?(?:ticket\s+)?(?:for\s+)?/i, '');
@@ -511,7 +517,8 @@
         });
         return option;
       }));
-      el.assistantAssigneeOptions.classList.toggle('hidden', matches.length === 0);
+      if (matches.length) revealAssistantOptions(el.assistantAssigneeOptions);
+      else hide(el.assistantAssigneeOptions);
     }
 
     function updateAssistantSuggestions() {
@@ -526,15 +533,25 @@
       }
       hide(el.assistantAssigneeOptions);
       const query = assistantEmployeeQuery(text);
-      if (query.length < 2) {
+      if (query.length < 1) {
         hide(el.assistantEmployeeOptions);
         return;
       }
       assistantSearchTimer = setTimeout(async () => {
         try {
           const { ok, data } = await api('/api/search?q=' + encodeURIComponent(query));
-          if (!ok || sequence !== assistantSearchSequence) return;
+          if (sequence !== assistantSearchSequence) return;
+          if (!ok) {
+            el.assistantEmployeeOptions.textContent = 'কর্মীর নাম খোঁজা যাচ্ছে না। আবার চেষ্টা করুন।';
+            revealAssistantOptions(el.assistantEmployeeOptions);
+            return;
+          }
           const matches = Array.isArray(data.matches) ? data.matches : [];
+          if (!matches.length) {
+            el.assistantEmployeeOptions.textContent = 'কোনো কর্মী পাওয়া যায়নি। নাম, ID, email বা phone দিয়ে খুঁজুন।';
+            revealAssistantOptions(el.assistantEmployeeOptions);
+            return;
+          }
           el.assistantEmployeeOptions.replaceChildren(...matches.map((employee) => {
             const option = document.createElement('button'); option.type = 'button'; option.setAttribute('role', 'option');
             option.className = 'block w-full rounded-lg px-3 py-2 text-left hover:bg-cyan-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500';
@@ -547,9 +564,12 @@
             });
             return option;
           }));
-          el.assistantEmployeeOptions.classList.toggle('hidden', matches.length === 0);
+          revealAssistantOptions(el.assistantEmployeeOptions);
         } catch (_) {
-          if (sequence === assistantSearchSequence) hide(el.assistantEmployeeOptions);
+          if (sequence === assistantSearchSequence) {
+            el.assistantEmployeeOptions.textContent = 'কর্মীর নাম খোঁজা যাচ্ছে না। আবার চেষ্টা করুন।';
+            revealAssistantOptions(el.assistantEmployeeOptions);
+          }
         }
       }, 180);
     }

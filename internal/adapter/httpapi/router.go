@@ -72,7 +72,6 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 		log.Println("🔒 Basic Auth enabled")
 	}
 	site.StaticFile("/", "./static/index.html")
-	site.StaticFile("/dashboard", "./static/index.html")
 	site.StaticFile("/admin", "./static/admin.html")
 
 	api := site.Group("/api")

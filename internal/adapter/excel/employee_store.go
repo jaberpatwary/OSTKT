@@ -79,7 +79,8 @@ func (s *EmployeeStore) Search(query string, limit int) []Employee {
 	if q == "" {
 		return result
 	}
-	var startsWith, contains, idMatch []Employee
+	phoneQuery := digitsOnly(query)
+	var startsWith, contains, identifierMatch []Employee
 	for _, e := range s.snapshot() {
 		name := normalize(e.Name)
 		switch {
@@ -87,17 +88,28 @@ func (s *EmployeeStore) Search(query string, limit int) []Employee {
 			startsWith = append(startsWith, e)
 		case strings.Contains(name, q):
 			contains = append(contains, e)
-		case strings.Contains(strings.ToLower(e.EmployeeID), q):
-			idMatch = append(idMatch, e)
+		case strings.Contains(strings.ToLower(e.EmployeeID), q), strings.Contains(strings.ToLower(e.Email), q):
+			identifierMatch = append(identifierMatch, e)
+		case phoneQuery != "" && strings.Contains(digitsOnly(e.Phone), phoneQuery):
+			identifierMatch = append(identifierMatch, e)
 		}
 	}
 	result = append(result, startsWith...)
 	result = append(result, contains...)
-	result = append(result, idMatch...)
+	result = append(result, identifierMatch...)
 	if len(result) > limit {
 		result = result[:limit]
 	}
 	return result
+}
+
+func digitsOnly(value string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, value)
 }
 
 // Resolve — টিকিট বানানোর আগে নির্দিষ্ট employee খুঁজে বের করে।

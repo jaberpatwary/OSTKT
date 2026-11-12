@@ -228,6 +228,35 @@
         </summary>
         <ul id="pendingList" class="divide-y divide-slate-100 border-t border-amber-100"></ul>
       </details>
+
+      <section aria-labelledby="ticketAssistantTitle" class="mt-6 overflow-hidden rounded-2xl border border-cyan-100 bg-white shadow-lg shadow-cyan-900/5">
+        <header class="flex items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-cyan-50 to-blue-50 px-4 py-4">
+          <div class="flex min-w-0 items-center gap-3">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-600 to-blue-600 text-xl text-white shadow-md" aria-hidden="true">✦</span>
+            <div class="min-w-0"><h2 id="ticketAssistantTitle" class="truncate font-bold text-slate-900">Ticket Assistant</h2><p class="text-xs text-slate-500">কথা বলেই ticket draft তৈরি করুন</p></div>
+          </div>
+          <span class="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700">Groq API পরে যুক্ত হবে</span>
+        </header>
+
+        <div id="assistantMessages" class="max-h-80 space-y-3 overflow-y-auto bg-slate-50/70 p-4" aria-live="polite" aria-label="Ticket assistant conversation">
+          <div class="flex justify-start"><p class="max-w-[92%] rounded-2xl rounded-tl-md border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed text-slate-700 shadow-sm">হ্যালো! কর্মীর নাম ও সমস্যাটা লিখুন। যেমন: “Sumaiya-এর PC চালু হচ্ছে না, assign Rupok-কে।” API যুক্ত হলে আমি ticket তৈরি করে দেব।</p></div>
+          <div class="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">এটি এখন UI preview। Groq API সংযোগ না হওয়া পর্যন্ত chat থেকে কোনো message process বা ticket submit হবে না।</div>
+        </div>
+
+        <div class="border-t border-slate-100 bg-white p-4">
+          <p class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Try an example</p>
+          <div class="mb-3 flex flex-wrap gap-2">
+            <button type="button" data-assistant-prompt="Sumaiya-এর laptop-এ network সমস্যা হচ্ছে, assign Rupok-কে" class="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-left text-[11px] text-slate-600 transition hover:border-cyan-300 hover:bg-cyan-50">Network সমস্যা assign করুন</button>
+            <button type="button" data-assistant-prompt="Towhedul Islam-এর জন্য printer কাজ করছে না ticket করুন" class="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-left text-[11px] text-slate-600 transition hover:border-cyan-300 hover:bg-cyan-50">Printer issue ticket</button>
+          </div>
+          <label for="assistantInput" class="sr-only">Ticket assistant-কে message লিখুন</label>
+          <div class="flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm focus-within:border-cyan-400 focus-within:ring-4 focus-within:ring-cyan-500/10">
+            <textarea id="assistantInput" rows="2" maxlength="1200" placeholder="কর্মীর নাম ও সমস্যাটা লিখুন..." class="max-h-28 min-h-12 flex-1 resize-y border-0 bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" aria-describedby="assistantStatus"></textarea>
+            <button id="assistantSend" type="button" disabled title="Groq API সংযোগ হলে চালু হবে" class="flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-slate-300 px-3 text-xs font-bold text-white" aria-label="Send message">Send <span aria-hidden="true">➤</span></button>
+          </div>
+          <p id="assistantStatus" class="mt-2 text-center text-[10px] text-slate-400">Groq API যুক্ত হলে message পাঠানো ও ticket তৈরি চালু হবে</p>
+        </div>
+      </section>
       </section>
       </div>
     </section>
@@ -288,6 +317,7 @@
       ticketDetails: $('ticketDetails'), problemInput: $('problemInput'), assignedToInput: $('assignedToInput'),
       actionButtons: $('actionButtons'), doneBtn: $('doneBtn'), pendingBtn: $('pendingBtn'), doneSub: $('doneSub'),
       pendingPanel: $('pendingPanel'), pendingCount: $('pendingCount'), pendingList: $('pendingList'),
+      assistantInput: $('assistantInput'), assistantStatus: $('assistantStatus'),
       dashTotal: $('dashTotal'), dashPending: $('dashPending'), dashDone: $('dashDone'), dashToday: $('dashToday'),
       dashboardRecent: $('dashboardRecent'), dashboardEmpty: $('dashboardEmpty'),
       dashboardCompletionRate: $('dashCompletionRate'), dashboardProgress: $('dashboardProgress'),
@@ -972,6 +1002,13 @@
       activeIssueFilter = '';
       el.dashboardSearch.value = '';
       renderRecentTickets(getRangeTickets(dashboardTickets));
+    });
+    document.querySelectorAll('[data-assistant-prompt]').forEach((button) => {
+      button.addEventListener('click', () => {
+        el.assistantInput.value = button.dataset.assistantPrompt;
+        el.assistantInput.focus();
+        el.assistantStatus.textContent = 'Example বসানো হয়েছে। Groq API যুক্ত হলে এটি পাঠাতে পারবেন।';
+      });
     });
     el.convertDoneBtn.addEventListener('click', () => {
       if (state.ticket) convertToDone(state.ticket.id, el.convertDoneBtn);

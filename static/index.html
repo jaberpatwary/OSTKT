@@ -91,7 +91,17 @@
           </div>
         </header>
 
-        <div class="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div class="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <div><p class="text-sm font-bold text-slate-800">Analytics range</p><p id="analyticsRangeHint" class="text-xs text-slate-400">Issue charts and recent list are filtered; monthly trend stays at 12 months</p></div>
+          <div class="flex flex-wrap items-center gap-2">
+            <label for="analyticsRange" class="sr-only">Analytics range</label>
+            <select id="analyticsRange" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="365">Last 12 months</option><option value="all">All available</option></select>
+            <label for="dashboardSearch" class="sr-only">Search tickets</label>
+            <input id="dashboardSearch" type="search" placeholder="Search name, issue, assignee…" class="w-56 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10" />
+          </div>
+        </div>
+
+        <div class="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-6">
           <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-slate-500">Total tickets</p><p id="dashTotal" class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">—</p><p class="mt-1 text-xs text-slate-400">All recorded requests</p>
           </article>
           <article class="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-amber-700">Open / Pending</p><p id="dashPending" class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">—</p><p class="mt-1 text-xs text-slate-400">Waiting for resolution</p>
@@ -100,14 +110,19 @@
           </article>
           <article class="rounded-2xl border border-cyan-100 bg-white p-4 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-cyan-700">Created today</p><p id="dashToday" class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">—</p><p class="mt-1 text-xs text-slate-400">New support requests</p>
           </article>
+          <article class="rounded-2xl border border-rose-100 bg-white p-4 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-rose-700">Unassigned open</p><p id="dashUnassigned" class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">—</p><p class="mt-1 text-xs text-slate-400">Needs an owner</p>
+          </article>
+          <article class="rounded-2xl border border-violet-100 bg-white p-4 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-violet-700">Oldest open · sample</p><p id="dashOldest" class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">—</p><p class="mt-1 text-xs text-slate-400">Age within latest 500 open tickets</p>
+          </article>
         </div>
 
         <div class="mt-4 grid gap-4 xl:grid-cols-3">
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div class="flex items-start justify-between"><div><h3 class="font-bold text-slate-800">Support status</h3><p class="text-xs text-slate-400">Resolved vs open tickets</p></div><span id="dashCompletionRate" class="rounded-full bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700">—</span></div><div class="mt-3 flex items-center justify-center gap-4"><svg id="statusDonut" viewBox="0 0 160 160" class="h-40 w-40 -rotate-90" role="img" aria-label="Ticket status distribution"><circle cx="80" cy="80" r="58" fill="none" stroke="#e2e8f0" stroke-width="22"/><circle id="donutDone" cx="80" cy="80" r="58" fill="none" stroke="#18a66a" stroke-width="22" stroke-dasharray="0 365"/><circle id="donutPending" cx="80" cy="80" r="58" fill="none" stroke="#f4ad28" stroke-width="22" stroke-dasharray="0 365" stroke-dashoffset="-365"/></svg><div class="space-y-3 text-xs"><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Resolved <strong id="donutDoneLabel" class="ml-1 text-slate-800">—</strong></p><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-amber-400"></span>Open <strong id="donutPendingLabel" class="ml-1 text-slate-800">—</strong></p><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-slate-200"></span>Total <strong id="donutTotalLabel" class="ml-1 text-slate-800">—</strong></p></div></div><div class="h-2 overflow-hidden rounded-full bg-slate-100"><div id="dashboardProgress" class="h-full rounded-full bg-emerald-500 transition-all" style="width:0%"></div></div></section>
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div class="flex flex-wrap items-start justify-between gap-2"><div><h3 class="font-bold text-slate-800">Tickets by issue type</h3><p class="text-xs text-slate-400">Open and resolved volume</p></div><div class="flex gap-2 text-[10px]"><span class="text-emerald-600">● Resolved</span><span class="text-cyan-600">● Open</span></div></div><div id="issueTypeChart" class="mt-4 space-y-3" aria-label="Ticket issue type chart"></div></section>
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div><h3 class="font-bold text-slate-800">Resolved by category</h3><p class="text-xs text-slate-400">Top recurring categories</p></div><div id="categoryChart" class="mt-4 flex h-44 items-end justify-around gap-2 border-b border-slate-100 pb-1" aria-label="Resolved ticket categories"></div></section>
-          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-3"><div class="flex flex-wrap items-start justify-between gap-3"><div><h3 class="font-bold text-slate-800">Monthly ticket volume by current status</h3><p class="text-xs text-slate-400">Tickets created in each month · last 12 months</p></div><div class="flex gap-4 text-xs"><span class="text-amber-600">● Resolved</span><span class="text-cyan-700">● Open</span></div></div><div id="monthlyChart" class="mt-3 overflow-hidden" aria-label="Monthly ticket trend"></div></section>
-          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-3"><div class="flex items-center justify-between gap-2"><div><h3 class="font-bold text-slate-800">Recent tickets</h3><p class="text-xs text-slate-400">Latest support requests and assignees</p></div><a href="/admin" class="text-xs font-semibold text-blue-700 hover:underline">Open ticket manager →</a></div><ul id="dashboardRecent" class="mt-2 grid gap-x-6 divide-y divide-slate-100 md:grid-cols-2 md:divide-y-0"></ul><p id="dashboardEmpty" class="hidden py-6 text-center text-sm text-slate-400">এখনো কোনো টিকিট নেই</p></section>
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-3"><div class="flex flex-wrap items-start justify-between gap-3"><div><h3 class="font-bold text-slate-800">Monthly ticket volume by current status</h3><p class="text-xs text-slate-400">Tickets created in each month · 12 months · all range</p></div><div class="flex gap-4 text-xs"><span class="text-amber-600">● Resolved</span><span class="text-cyan-700">● Open</span></div></div><div id="monthlyChart" class="mt-3 overflow-hidden" aria-label="Monthly ticket trend"></div></section>
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-1"><div><h3 class="font-bold text-slate-800">Open workload</h3><p class="text-xs text-slate-400">Pending tickets by assignee</p></div><div id="assigneeWorkload" class="mt-4 space-y-3"></div></section>
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-2"><div class="flex flex-wrap items-center justify-between gap-2"><div><h3 class="font-bold text-slate-800">Recent tickets</h3><p id="recentTicketCount" class="text-xs text-slate-400">Latest support requests and assignees</p></div><div class="flex items-center gap-3"><button id="clearTicketFilters" type="button" class="hidden text-xs font-semibold text-rose-600 hover:underline">Clear filters</button><a href="/admin" class="text-xs font-semibold text-blue-700 hover:underline">Open ticket manager →</a></div></div><ul id="dashboardRecent" class="mt-2 divide-y divide-slate-100"></ul><p id="dashboardEmpty" class="hidden py-6 text-center text-sm text-slate-400">এখনো কোনো টিকিট নেই</p></section>
         </div>
         <p id="dashboardError" role="status" class="mt-3 hidden rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
       </section>
@@ -258,6 +273,9 @@
       donutDone: $('donutDone'), donutPending: $('donutPending'), donutDoneLabel: $('donutDoneLabel'),
       donutPendingLabel: $('donutPendingLabel'), donutTotalLabel: $('donutTotalLabel'), issueTypeChart: $('issueTypeChart'),
       categoryChart: $('categoryChart'), monthlyChart: $('monthlyChart'),
+      analyticsRange: $('analyticsRange'), analyticsRangeHint: $('analyticsRangeHint'), dashboardSearch: $('dashboardSearch'),
+      assigneeWorkload: $('assigneeWorkload'), dashUnassigned: $('dashUnassigned'), dashOldest: $('dashOldest'),
+      recentTicketCount: $('recentTicketCount'), clearTicketFilters: $('clearTicketFilters'),
       dashboardUpdated: $('dashboardUpdated'), dashboardRefresh: $('dashboardRefresh'), dashboardError: $('dashboardError'),
       resultHeader: $('resultHeader'), resultIcon: $('resultIcon'), resultTitle: $('resultTitle'), resultSubtitle: $('resultSubtitle'),
       ticketNumber: $('ticketNumber'), rName: $('rName'), rEmpId: $('rEmpId'), rDept: $('rDept'), rProblem: $('rProblem'), rAssignee: $('rAssignee'), rEmail: $('rEmail'),
@@ -279,6 +297,8 @@
       pollToken: 0,       // ইমেইল স্ট্যাটাস পোলিং বাতিল করতে
     };
     let debounceTimer = null;
+    let dashboardTickets = [];
+    let activeIssueFilter = '';
 
     // ---------- ছোট হেল্পার ----------
     const show = (node) => node.classList.remove('hidden');
@@ -330,7 +350,11 @@
       const rows = [...categories.values()].sort((a, b) => b.total - a.total).slice(0, 5);
       const max = Math.max(1, ...rows.map((row) => row.total));
       el.issueTypeChart.replaceChildren(...rows.map((row) => {
-        const wrap = document.createElement('div');
+        const wrap = document.createElement('button');
+        wrap.type = 'button';
+        wrap.className = `block w-full rounded-lg text-left transition hover:bg-slate-50 ${activeIssueFilter === row.name ? 'bg-cyan-50 ring-1 ring-cyan-200' : ''}`;
+        wrap.setAttribute('aria-label', `Filter recent tickets by ${row.name}`);
+        wrap.addEventListener('click', () => { activeIssueFilter = activeIssueFilter === row.name ? '' : row.name; renderRecentTickets(getRangeTickets(dashboardTickets)); });
         const head = document.createElement('div');
         head.className = 'mb-1 flex justify-between text-xs';
         const name = document.createElement('span'); name.className = 'font-medium text-slate-600'; name.textContent = row.name;
@@ -379,9 +403,26 @@
       el.monthlyChart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" class="w-full" role="img" aria-label="Tickets created by month, grouped by current status">${grid}${poly('resolved', '#f0a51b')}${poly('open', '#12a6b6')}${dots('resolved', '#f0a51b')}${dots('open', '#12a6b6')}${labels}</svg>`;
     }
 
+    function getRangeTickets(tickets) {
+      const range = el.analyticsRange.value;
+      if (range === 'all') return tickets;
+      const cutoff = Date.now() - Number(range) * 24 * 60 * 60 * 1000;
+      return tickets.filter((ticket) => new Date(ticket.created_at).getTime() >= cutoff);
+    }
+
     function renderRecentTickets(tickets) {
-      const recent = [...tickets].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5);
+      const query = el.dashboardSearch.value.trim().toLowerCase();
+      const filtered = tickets.filter((ticket) => {
+        if (activeIssueFilter && issueCategory(ticket) !== activeIssueFilter) return false;
+        const haystack = `${ticket.ticket_number} ${ticket.employee?.Name || ''} ${ticket.problem || ''} ${ticket.assigned_to || ''}`.toLowerCase();
+        return !query || haystack.includes(query);
+      });
+      const recent = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 8);
+      el.recentTicketCount.textContent = `${recent.length} shown · ${filtered.length} matching · ${tickets.length} in range`;
       el.dashboardEmpty.classList.toggle('hidden', recent.length > 0);
+      el.dashboardEmpty.textContent = filtered.length ? 'No tickets match these filters.' : 'No tickets in this range yet.';
+      el.clearTicketFilters.classList.toggle('hidden', !activeIssueFilter && !query);
+      el.clearTicketFilters.textContent = activeIssueFilter ? `Clear ${activeIssueFilter} filter` : 'Clear search';
       el.dashboardRecent.replaceChildren(...recent.map((ticket) => {
         const item = document.createElement('li');
         item.className = 'flex items-start justify-between gap-3 py-3';
@@ -402,17 +443,55 @@
       }));
     }
 
+    function renderAssigneeWorkload(pendingTickets) {
+      const workload = new Map();
+      pendingTickets.forEach((ticket) => {
+        const name = (ticket.assigned_to || '').trim() || 'Unassigned';
+        workload.set(name, (workload.get(name) || 0) + 1);
+      });
+      const rows = [...workload.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+      const max = Math.max(1, ...rows.map((row) => row[1]));
+      el.assigneeWorkload.replaceChildren(...rows.map(([name, count]) => {
+        const row = document.createElement('div');
+        const title = document.createElement('div'); title.className = 'mb-1 flex justify-between gap-2 text-xs';
+        const label = document.createElement('span'); label.className = 'truncate font-medium text-slate-600'; label.textContent = name;
+        const value = document.createElement('strong'); value.className = 'text-slate-800'; value.textContent = String(count);
+        title.append(label, value);
+        const track = document.createElement('div'); track.className = 'h-2 overflow-hidden rounded-full bg-slate-100';
+        const bar = document.createElement('div'); bar.className = `h-full rounded-full ${name === 'Unassigned' ? 'bg-rose-400' : 'bg-violet-500'}`; bar.style.width = `${count / max * 100}%`;
+        track.append(bar); row.append(title, track); return row;
+      }));
+      if (!rows.length) el.assigneeWorkload.textContent = 'No open tickets';
+      const unassigned = pendingTickets.filter((ticket) => !(ticket.assigned_to || '').trim()).length;
+      el.dashUnassigned.textContent = toBnDigits(unassigned);
+      const oldest = pendingTickets.reduce((maxAge, ticket) => Math.max(maxAge, Date.now() - new Date(ticket.created_at).getTime()), 0);
+      const oldestDays = pendingTickets.length ? Math.floor(oldest / 86400000) : 0;
+      el.dashOldest.textContent = pendingTickets.length ? (oldestDays ? `${toBnDigits(oldestDays)}d` : '<1d') : '—';
+    }
+
+    function renderDashboardViews() {
+      const ranged = getRangeTickets(dashboardTickets);
+      const days = el.analyticsRange.value;
+      el.analyticsRangeHint.textContent = `${days === 'all' ? 'All available' : `Last ${days} days`} · issue charts and recent list · latest 500 tickets`;
+      renderIssueTypeChart(ranged);
+      renderCategoryChart(ranged);
+      renderMonthlyChart(dashboardTickets);
+      renderRecentTickets(ranged);
+    }
+
     async function loadDashboard() {
       el.dashboardRefresh.disabled = true;
       el.dashboardError.classList.add('hidden');
       try {
         const [all, pending, done] = await Promise.all([
           api('/api/tickets?limit=500'),
-          api('/api/tickets?status=pending&limit=1'),
+          api('/api/tickets?status=pending&limit=500'),
           api('/api/tickets?status=done&limit=1'),
         ]);
         if (!all.ok || !pending.ok || !done.ok) throw new Error('Dashboard data could not be loaded.');
         const tickets = Array.isArray(all.data.tickets) ? all.data.tickets : [];
+        dashboardTickets = tickets;
+        const pendingTickets = Array.isArray(pending.data.tickets) ? pending.data.tickets : [];
         const pendingTotal = Number(pending.data.total || 0);
         const doneTotal = Number(done.data.total || 0);
         const total = Number(all.data.total ?? (pendingTotal + doneTotal));
@@ -434,10 +513,8 @@
         el.donutDoneLabel.textContent = toBnDigits(doneTotal);
         el.donutPendingLabel.textContent = toBnDigits(pendingTotal);
         el.donutTotalLabel.textContent = toBnDigits(total);
-        renderIssueTypeChart(tickets);
-        renderCategoryChart(tickets);
-        renderMonthlyChart(tickets);
-        renderRecentTickets(tickets);
+        renderAssigneeWorkload(pendingTickets);
+        renderDashboardViews();
         el.dashboardUpdated.textContent = `Updated ${new Intl.DateTimeFormat('bn-BD', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Dhaka' }).format(new Date())}`;
       } catch (error) {
         el.dashboardError.textContent = error.message || 'Dashboard data could not be loaded.';
@@ -854,6 +931,13 @@
     el.doneBtn.addEventListener('click', () => submitTicket('done'));
     el.pendingBtn.addEventListener('click', () => submitTicket('pending'));
     el.dashboardRefresh.addEventListener('click', loadDashboard);
+    el.analyticsRange.addEventListener('change', renderDashboardViews);
+    el.dashboardSearch.addEventListener('input', () => renderRecentTickets(getRangeTickets(dashboardTickets)));
+    el.clearTicketFilters.addEventListener('click', () => {
+      activeIssueFilter = '';
+      el.dashboardSearch.value = '';
+      renderRecentTickets(getRangeTickets(dashboardTickets));
+    });
     el.convertDoneBtn.addEventListener('click', () => {
       if (state.ticket) convertToDone(state.ticket.id, el.convertDoneBtn);
     });

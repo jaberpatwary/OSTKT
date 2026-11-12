@@ -464,7 +464,14 @@
       query = query.replace(/^(?:for|employee|user|name)\s*[:\-]?\s*/i, '');
       const marker = query.search(/\b(?:problem|issue|pc|computer|laptop|network|printer|internet|email|password|login|broken|assign(?:ed|ee)?|assing)\b|(?:\s+(?:er|এর|for)\s+)|(?:এর\s+জন্য)|(?:[-–—]এর)\b/i);
       if (marker >= 0) query = query.slice(0, marker);
-      return query.replace(/(?:'s|’s)$/i, '').trim().replace(/[.,!?;:]+$/g, '').trim();
+      // Chat messages may start with Bengali/English request words before the employee name.
+      const filler = new Set([
+        'a', 'an', 'the', 'please', 'create', 'make', 'open', 'submit', 'new', 'need', 'want', 'ticket', 'for', 'employee', 'user', 'name', 'problem', 'issue', 'pc', 'computer', 'laptop', 'network', 'printer', 'internet', 'email', 'password', 'login', 'broken', 'my', 'amar', 'amr', 'userer', 'kormir', 'kormochari', 'somossa', 'somossar',
+        'আমার', 'আমারটা', 'একটা', 'টিকিট', 'টিকেট', 'করুন', 'করতে', 'চাই', 'দিয়ে', 'জন্য', 'কর্মী', 'কর্মীর', 'নাম', 'সমস্যা', 'সমস্যাটা', 'সমস্যার', 'হচ্ছে', 'হয়েছে', 'নষ্ট', 'লিখুন', 'এর', 'এটা', 'একটি', 'দরকার', 'আমাকে',
+      ]);
+      return query.replace(/(?:'s|’s)$/i, '').trim().replace(/[.,!?;:]+$/g, '').split(/\s+/)
+        .filter((word) => !filler.has(word.toLocaleLowerCase()))
+        .join(' ').trim();
     }
 
     function renderAssistantAssignees(query) {

@@ -2,11 +2,8 @@ package usecase
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
-	"fmt"
 	"log"
-	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -122,7 +119,7 @@ func (s *TicketService) Create(ctx context.Context, input CreateTicketInput) (do
 		Phone:        employee.Phone,
 		Status:       status,
 	}
-	if err := s.createWithUniqueNumber(ctx, &ticket); err != nil {
+	if err := s.repository.Create(ctx, &ticket); err != nil {
 		return domain.Ticket{}, false, err
 	}
 	queued := status == domain.StatusDone && s.queueEmail(ticket)
@@ -186,33 +183,6 @@ func (s *TicketService) List(ctx context.Context, status string, limit int) ([]d
 		limit = 100
 	}
 	return s.repository.List(ctx, domain.TicketFilter{Status: status, Limit: limit})
-}
-
-func (s *TicketService) createWithUniqueNumber(ctx context.Context, ticket *domain.Ticket) error {
-	for attempt := 0; attempt < 10; attempt++ {
-		number, err := generateTicketNumber(time.Now().In(s.location))
-		if err != nil {
-			return err
-		}
-		ticket.ID = 0
-		ticket.TicketNumber = number
-		err = s.repository.Create(ctx, ticket)
-		if err == nil {
-			return nil
-		}
-		if !errors.Is(err, domain.ErrDuplicateKey) {
-			return err
-		}
-	}
-	return errors.New("could not create a unique ticket number after 10 attempts")
-}
-
-func generateTicketNumber(now time.Time) (string, error) {
-	value, err := rand.Int(rand.Reader, big.NewInt(10000))
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("TKT-%s-%04d", now.Format("20060102"), value.Int64()), nil
 }
 
 func (s *TicketService) queueEmail(ticket domain.Ticket) bool {

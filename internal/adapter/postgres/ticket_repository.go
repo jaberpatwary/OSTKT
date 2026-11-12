@@ -3,11 +3,13 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"ticket-system/internal/domain"
 )
@@ -28,6 +30,13 @@ type ticketRecord struct {
 }
 
 func (ticketRecord) TableName() string { return "tickets" }
+
+type ticketNumberCounter struct {
+	ID        uint `gorm:"primaryKey"`
+	LastValue uint64
+}
+
+func (ticketNumberCounter) TableName() string { return "ticket_number_counters" }
 
 func recordFromDomain(ticket *domain.Ticket) ticketRecord {
 	return ticketRecord{
@@ -60,17 +69,41 @@ func NewTicketRepository(db *gorm.DB) *TicketRepository {
 }
 
 func (r *TicketRepository) Migrate() error {
-	return r.db.AutoMigrate(&ticketRecord{})
+	if err := r.db.AutoMigrate(&ticketRecord{}, &ticketNumberCounter{}); err != nil {
+		return err
+	}
+	var count int64
+	if err := r.db.Model(&ticketRecord{}).Count(&count).Error; err != nil {
+		return err
+	}
+	counter := ticketNumberCounter{ID: 1, LastValue: uint64(count)}
+	return r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&counter).Error
 }
 
 func (r *TicketRepository) Create(ctx context.Context, ticket *domain.Ticket) error {
 	record := recordFromDomain(ticket)
-	err := r.db.WithContext(ctx).Create(&record).Error
+	var created ticketRecord
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var counter ticketNumberCounter
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&counter, 1).Error; err != nil {
+			return err
+		}
+		counter.LastValue++
+		if err := tx.Model(&counter).Update("last_value", counter.LastValue).Error; err != nil {
+			return err
+		}
+		record.TicketNumber = fmt.Sprintf("TKT-%06d", counter.LastValue)
+		if err := tx.Create(&record).Error; err != nil {
+			return err
+		}
+		created = record
+		return nil
+	})
 	if errors.Is(err, gorm.ErrDuplicatedKey) || isDuplicate(err) {
 		return domain.ErrDuplicateKey
 	}
 	if err == nil {
-		*ticket = record.toDomain()
+		*ticket = created.toDomain()
 	}
 	return err
 }

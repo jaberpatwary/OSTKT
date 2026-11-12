@@ -29,6 +29,28 @@
     body { font-family: 'Hind Siliguri', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
     summary::-webkit-details-marker { display: none; }
 
+    /* Dashboard and ticket entry keep their own scroll positions on wider screens. */
+    @media (min-width: 720px) {
+      body > main { padding-bottom: .75rem; }
+      #dashboardSection, #ticketSection {
+        height: calc(100vh - 3.25rem);
+        max-height: calc(100vh - 3.25rem);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        scrollbar-color: #94a3b8 transparent;
+      }
+      #dashboardSection { position: sticky; top: 1rem; }
+      #ticketSection { position: sticky; top: 1rem; }
+      #dashboardSection::-webkit-scrollbar, #ticketSection::-webkit-scrollbar { width: 8px; }
+      #dashboardSection::-webkit-scrollbar-thumb, #ticketSection::-webkit-scrollbar-thumb {
+        border: 2px solid transparent;
+        border-radius: 999px;
+        background: #94a3b8;
+        background-clip: padding-box;
+      }
+    }
+
     /* Keep the ticket workspace wide on the left and analytics compact on the right. */
     @media (min-width: 720px) and (max-width: 1279px) {
       #workspaceLayout { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }

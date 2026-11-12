@@ -162,7 +162,6 @@ func (h *Handler) assistantChat(c *gin.Context) {
 	details.EmployeeName = strings.TrimSpace(details.EmployeeName)
 	details.Problem = strings.TrimSpace(details.Problem)
 	details.Assignee = strings.TrimSpace(details.Assignee)
-	details.Reply = strings.TrimSpace(details.Reply)
 	if len([]rune(details.Problem)) > 2000 {
 		c.JSON(http.StatusOK, gin.H{"reply": "সমস্যার বিবরণ ২০০০ অক্ষরের মধ্যে ছোট করে লিখুন।"})
 		return
@@ -172,9 +171,9 @@ func (h *Handler) assistantChat(c *gin.Context) {
 		return
 	}
 	if details.Problem == "" {
-		reply := details.Reply
-		if reply == "" {
-			reply = "কী সমস্যা হচ্ছে, একটু বিস্তারিত লিখবেন?"
+		reply := "সমস্যাটি কী হচ্ছে, একটু বিস্তারিত লিখুন।"
+		if details.EmployeeName == "" {
+			reply = "কোন কর্মীর জন্য ticket করবেন এবং কী সমস্যা হচ্ছে? কর্মীর পূর্ণ নামসহ লিখুন।"
 		}
 		c.JSON(http.StatusOK, gin.H{"reply": reply})
 		return
@@ -195,11 +194,7 @@ func (h *Handler) assistantChat(c *gin.Context) {
 		}
 	} else {
 		if details.EmployeeName == "" {
-			reply := details.Reply
-			if reply == "" {
-				reply = "কোন কর্মীর জন্য ticket করবেন? পূর্ণ নামটি লিখুন।"
-			}
-			c.JSON(http.StatusOK, gin.H{"reply": reply})
+			c.JSON(http.StatusOK, gin.H{"reply": "কোন কর্মীর জন্য ticket করবেন? কর্মীর পূর্ণ নাম লিখুন।"})
 			return
 		}
 		matches := h.tickets.SearchEmployees(details.EmployeeName, usecase.MaxSearchResults)

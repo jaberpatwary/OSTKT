@@ -111,7 +111,7 @@
     let requestSequence = 0;
 
     async function getJSON(path, options) {
-      const response = await fetch(path, options);
+      const response = await fetch(path, { cache: 'no-store', ...(options || {}) });
       let data = {};
       try { data = await response.json(); } catch (_) {}
       return { ok: response.ok, status: response.status, data };

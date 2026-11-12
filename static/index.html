@@ -418,7 +418,7 @@
     async function api(path, options = {}) {
       const opts = { ...options };
       if (opts.body) opts.headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
-      const res = await fetch(path, opts);
+      const res = await fetch(path, { cache: 'no-store', ...opts });
       let data = {};
       try { data = await res.json(); } catch (_) { /* JSON নয় */ }
       return { ok: res.ok, status: res.status, data };
@@ -823,6 +823,8 @@
 
     async function loadDashboard() {
       el.dashboardRefresh.disabled = true;
+      el.dashboardRefresh.textContent = 'Refreshing…';
+      el.dashboardUpdated.textContent = 'Refreshing…';
       el.dashboardError.classList.add('hidden');
       try {
         const [all, pending, done] = await Promise.all([
@@ -861,7 +863,9 @@
       } catch (error) {
         el.dashboardError.textContent = error.message || 'Dashboard data could not be loaded.';
         el.dashboardError.classList.remove('hidden');
+        el.dashboardUpdated.textContent = 'Refresh failed';
       } finally {
+        el.dashboardRefresh.textContent = '↻ Refresh';
         el.dashboardRefresh.disabled = false;
       }
     }

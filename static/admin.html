@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#eff6ff" />
+  <title>Admin Panel — Auto Ticket System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <style>
+    body { font-family: 'Hind Siliguri', system-ui, sans-serif; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+  <main class="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+    <header class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <p class="text-sm font-semibold uppercase tracking-wider text-blue-600">Auto Ticket System</p>
+        <h1 class="mt-1 text-3xl font-bold text-slate-900">Admin Panel</h1>
+        <p class="mt-1 text-slate-500">টিকিট দেখুন, status filter করুন, Pending টিকিট Done করুন।</p>
+      </div>
+      <a href="/" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm hover:bg-slate-100">← Ticket Form</a>
+    </header>
+
+    <section aria-label="Ticket summary" class="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <p class="text-sm text-slate-500">মোট টিকিট</p>
+        <p id="totalCount" class="mt-1 text-3xl font-bold text-slate-900">—</p>
+      </div>
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+        <p class="text-sm text-amber-800">Pending</p>
+        <p id="pendingCount" class="mt-1 text-3xl font-bold text-amber-900">—</p>
+      </div>
+      <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+        <p class="text-sm text-emerald-800">Done</p>
+        <p id="doneCount" class="mt-1 text-3xl font-bold text-emerald-900">—</p>
+      </div>
+    </section>
+
+    <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div class="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">টিকিট তালিকা</h2>
+          <p id="listSummary" class="text-sm text-slate-500" aria-live="polite">তালিকা লোড হচ্ছে…</p>
+        </div>
+        <div class="flex flex-col gap-2 sm:flex-row">
+          <label class="sr-only" for="statusFilter">Status filter</label>
+          <select id="statusFilter" class="rounded-xl border border-slate-300 bg-white px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+            <option value="">সব status</option>
+            <option value="pending">Pending</option>
+            <option value="done">Done</option>
+          </select>
+          <label class="sr-only" for="searchInput">টিকিট খুঁজুন</label>
+          <input id="searchInput" type="search" placeholder="নাম / ID / ticket no." class="min-w-0 rounded-xl border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 sm:w-64" />
+          <button id="refreshBtn" type="button" class="rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60">↻ Refresh</button>
+        </div>
+      </div>
+
+      <div id="errorBox" role="alert" class="hidden m-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800"></div>
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[1180px] text-left text-sm">
+          <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <tr>
+              <th scope="col" class="px-4 py-3">Ticket</th>
+              <th scope="col" class="px-4 py-3">কর্মী</th>
+              <th scope="col" class="px-4 py-3">বিভাগ</th>
+              <th scope="col" class="px-4 py-3">সমস্যা</th>
+              <th scope="col" class="px-4 py-3">Assignee</th>
+              <th scope="col" class="px-4 py-3">তৈরির সময়</th>
+              <th scope="col" class="px-4 py-3">Status</th>
+              <th scope="col" class="px-4 py-3 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="ticketRows" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+      <div id="emptyState" class="hidden px-4 py-12 text-center text-slate-500">এই filter-এ কোনো ticket নেই।</div>
+      <p class="border-t border-slate-100 px-4 py-3 text-xs text-slate-400">নিরাপত্তার জন্য এই তালিকায় কর্মীর email ও phone দেখানো হয় না।</p>
+    </section>
+  </main>
+
+  <script>
+  (() => {
+    'use strict';
+    const $ = (id) => document.getElementById(id);
+    const rows = $('ticketRows');
+    const filter = $('statusFilter');
+    const search = $('searchInput');
+    const refresh = $('refreshBtn');
+    const number = (value) => new Intl.NumberFormat('bn-BD').format(value);
+    const dateFmt = new Intl.DateTimeFormat('bn-BD', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Dhaka'
+    });
+    let tickets = [];
+    let requestSequence = 0;
+
+    async function getJSON(path, options) {
+      const response = await fetch(path, options);
+      let data = {};
+      try { data = await response.json(); } catch (_) {}
+      return { ok: response.ok, status: response.status, data };
+    }
+
+    function cell(text, className) {
+      const td = document.createElement('td');
+      td.className = className || 'px-4 py-3';
+      td.textContent = text == null || text === '' ? '—' : String(text);
+      return td;
+    }
+
+    function render() {
+      const query = search.value.trim().toLocaleLowerCase();
+      const status = filter.value;
+      const visible = tickets.filter((ticket) => {
+        const employee = ticket.employee || {};
+        const matchesStatus = !status || ticket.status === status;
+        const haystack = [ticket.ticket_number, employee.Name, employee.EmployeeID, employee.Department, ticket.problem]
+          .filter(Boolean).join(' ').toLocaleLowerCase();
+        return matchesStatus && (!query || haystack.includes(query));
+      });
+      rows.replaceChildren();
+      for (const ticket of visible) {
+        const employee = ticket.employee || {};
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-slate-50';
+        const ticketCell = cell(ticket.ticket_number, 'whitespace-nowrap px-4 py-3 font-mono text-xs font-semibold text-blue-700');
+        const employeeCell = document.createElement('td');
+        employeeCell.className = 'px-4 py-3';
+        const name = document.createElement('p');
+        name.className = 'font-semibold text-slate-800';
+        name.textContent = employee.Name || '—';
+        const id = document.createElement('p');
+        id.className = 'mt-0.5 text-xs text-slate-500';
+        id.textContent = employee.EmployeeID ? 'ID: ' + employee.EmployeeID : '';
+        employeeCell.append(name, id);
+        const problemCell = cell(ticket.problem, 'max-w-[320px] whitespace-pre-wrap break-words px-4 py-3 text-slate-600');
+        const created = new Date(ticket.created_at);
+        const date = Number.isNaN(created.getTime()) ? '—' : dateFmt.format(created);
+        const statusCell = document.createElement('td');
+        statusCell.className = 'px-4 py-3';
+        const badge = document.createElement('span');
+        const done = ticket.status === 'done';
+        badge.className = done
+          ? 'inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800'
+          : 'inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800';
+        badge.textContent = done ? 'Done' : 'Pending';
+        statusCell.append(badge);
+        const actionCell = document.createElement('td');
+        actionCell.className = 'px-4 py-3 text-right';
+        if (!done) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'rounded-lg bg-emerald-600 px-3 py-1.5 font-semibold text-white hover:bg-emerald-700 disabled:opacity-60';
+          button.textContent = 'Done করুন';
+          button.addEventListener('click', () => markDone(ticket, button));
+          actionCell.append(button);
+        } else {
+          actionCell.textContent = '—';
+        }
+        const assigneeCell = document.createElement('td');
+        assigneeCell.className = 'px-4 py-3';
+        const assignment = document.createElement('div');
+        assignment.className = 'flex min-w-[250px] items-center gap-2';
+        const assigneeInput = document.createElement('input');
+        assigneeInput.type = 'text';
+        assigneeInput.maxLength = 100;
+        assigneeInput.value = ticket.assigned_to || '';
+        assigneeInput.placeholder = 'নাম লিখুন';
+        assigneeInput.setAttribute('aria-label', (employee.Name || 'Ticket') + ' assignee');
+        assigneeInput.className = 'min-w-0 flex-1 rounded-lg border border-slate-300 px-2.5 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200';
+        const assignButton = document.createElement('button');
+        assignButton.type = 'button';
+        assignButton.className = 'shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60';
+        assignButton.textContent = ticket.assigned_to ? 'Update' : 'Assign';
+        assignButton.addEventListener('click', () => saveAssignment(ticket, assigneeInput.value, assignButton));
+        assignment.append(assigneeInput, assignButton);
+        if (ticket.assigned_to) {
+          const clearButton = document.createElement('button');
+          clearButton.type = 'button';
+          clearButton.className = 'mt-1 rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800';
+          clearButton.textContent = 'Clear assignment';
+          clearButton.addEventListener('click', () => saveAssignment(ticket, '', clearButton));
+          assigneeCell.append(assignment, clearButton);
+        } else {
+          assigneeCell.append(assignment);
+        }
+        row.append(ticketCell, employeeCell, cell(employee.Department), problemCell, assigneeCell, cell(date), statusCell, actionCell);
+        rows.append(row);
+      }
+      $('emptyState').classList.toggle('hidden', visible.length !== 0);
+      $('listSummary').textContent = number(visible.length) + 'টি দেখানো হচ্ছে' + (tickets.length >= 500 ? ' (সর্বোচ্চ ৫০০)' : '');
+    }
+
+    async function loadTickets() {
+      const sequence = ++requestSequence;
+      refresh.disabled = true;
+      refresh.textContent = 'লোড হচ্ছে…';
+      $('errorBox').classList.add('hidden');
+      try {
+        const [all, pending, done] = await Promise.all([
+          getJSON('/api/tickets?limit=500'),
+          getJSON('/api/tickets?status=pending&limit=1'),
+          getJSON('/api/tickets?status=done&limit=1'),
+        ]);
+        if (sequence !== requestSequence) return;
+        const failure = [all, pending, done].find((result) => !result.ok);
+        if (failure) {
+          $('errorBox').textContent = failure.status === 401
+            ? 'Admin panel দেখতে login করুন।'
+            : (failure.data.error || 'টিকিট তালিকা আনা যায়নি।');
+          $('errorBox').classList.remove('hidden');
+          tickets = [];
+          render();
+          return;
+        }
+        tickets = Array.isArray(all.data.tickets) ? all.data.tickets : [];
+        $('totalCount').textContent = number(all.data.total ?? tickets.length);
+        $('pendingCount').textContent = number(pending.data.total ?? 0);
+        $('doneCount').textContent = number(done.data.total ?? 0);
+        render();
+      } catch (_) {
+        if (sequence !== requestSequence) return;
+        $('errorBox').textContent = 'সার্ভারে সংযোগ করা যায়নি। সার্ভার চালু আছে কিনা দেখুন।';
+        $('errorBox').classList.remove('hidden');
+      } finally {
+        if (sequence === requestSequence) {
+          refresh.disabled = false;
+          refresh.textContent = '↻ Refresh';
+        }
+      }
+    }
+
+    async function markDone(ticket, button) {
+      button.disabled = true;
+      button.textContent = 'আপডেট হচ্ছে…';
+      try {
+        const result = await getJSON('/api/tickets/' + encodeURIComponent(ticket.id) + '/done', { method: 'POST' });
+        if (!result.ok) throw new Error(result.data.error || 'টিকিট আপডেট করা যায়নি।');
+        await loadTickets();
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = 'আবার চেষ্টা';
+        $('errorBox').textContent = error.message;
+        $('errorBox').classList.remove('hidden');
+      }
+    }
+
+    async function saveAssignment(ticket, assignee, button) {
+      button.disabled = true;
+      const originalText = button.textContent;
+      button.textContent = 'Saving…';
+      try {
+        const result = await getJSON('/api/tickets/' + encodeURIComponent(ticket.id) + '/assignee', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignee: assignee })
+        });
+        if (!result.ok) throw new Error(result.data.error || 'Assignee update failed.');
+        await loadTickets();
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = originalText;
+        $('errorBox').textContent = error.message;
+        $('errorBox').classList.remove('hidden');
+      }
+    }
+
+    filter.addEventListener('change', render);
+    search.addEventListener('input', render);
+    refresh.addEventListener('click', loadTickets);
+    loadTickets();
+  })();
+  </script>
+</body>
+</html>

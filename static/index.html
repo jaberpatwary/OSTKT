@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>Auto Ticket System</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎫</text></svg>" />
+
+  <!-- বাংলা ফন্ট -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CDN — কোনো build step নেই -->
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['"Hind Siliguri"', 'system-ui', 'sans-serif'] },
+          borderRadius: { '2xl': '1.5rem' }, // স্পেক অনুযায়ী rounded-2xl = 24px
+        },
+      },
+    };
+  </script>
+
+  <style>
+    body { font-family: 'Hind Siliguri', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+    summary::-webkit-details-marker { display: none; }
+
+    /* স্ক্রিন বদলের সময় হালকা এন্ট্রি */
+    .screen-enter { animation: screenIn .3s ease-out both; }
+    @keyframes screenIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+    /* রেজাল্ট আইকনের "স্ট্যাম্প" — একমাত্র বড় মোশন */
+    .stamp { animation: stamp .5s cubic-bezier(.2, 1.5, .4, 1) .1s both; }
+    @keyframes stamp { from { opacity: 0; transform: scale(.3) rotate(-12deg); } to { opacity: 1; transform: none; } }
+
+    /* টিকিটের দুই পাশে পাঞ্চ-হোল */
+    .ticket-cut { position: relative; }
+    .ticket-cut::before, .ticket-cut::after {
+      content: ''; position: absolute; top: 50%; width: 24px; height: 24px; border-radius: 9999px;
+      background: #f1f6ff; transform: translateY(-50%); box-shadow: inset 0 2px 4px rgba(15, 23, 42, .07);
+    }
+    .ticket-cut::before { left: -12px; }
+    .ticket-cut::after { right: -12px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
+    }
+
+    /* প্রিন্টে শুধু টিকিট কার্ড */
+    @media print {
+      @page { margin: 12mm; }
+      body { background: #fff !important; }
+      .no-print, #homeScreen, #toast { display: none !important; }
+      main { padding: 0 !important; max-width: 100% !important; }
+      #ticketCard { box-shadow: none !important; border: 1px solid #e2e8f0; }
+      .ticket-cut::before, .ticket-cut::after { display: none; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-gradient-to-b from-blue-50 via-sky-50/50 to-white bg-fixed text-slate-800 antialiased">
+
+  <!-- টোস্ট নোটিফিকেশন (উপরে ভেসে আসে) -->
+  <div id="toast" class="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4" role="alert" aria-live="assertive">
+    <div id="toastBox" class="flex max-w-sm -translate-y-24 items-start gap-2 rounded-2xl bg-red-600 px-4 py-3 text-white opacity-0 shadow-xl transition duration-300">
+      <span id="toastIcon" aria-hidden="true">⚠️</span>
+      <p id="toastText" class="text-sm font-medium leading-snug"></p>
+    </div>
+  </div>
+
+  <main class="mx-auto w-full max-w-md px-4 pb-14 pt-10 sm:pt-16">
+
+    <!-- ===================== হোম স্ক্রিন ===================== -->
+    <section id="homeScreen" class="screen-enter">
+      <header class="text-center">
+        <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-emerald-500 text-4xl shadow-lg shadow-blue-600/25" aria-hidden="true">🎫</div>
+        <h1 class="mt-5 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Auto Ticket System</h1>
+        <p class="mt-1 text-base text-slate-500">শুধু নাম লিখুন — বাকিটা অটো</p>
+        <a href="/admin" class="mt-4 inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm transition hover:border-blue-400 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">⚙️ Admin Panel</a>
+      </header>
+
+      <!-- নাম ইনপুট + অটোকমপ্লিট -->
+      <div class="relative mt-8">
+        <label for="nameInput" class="sr-only">কর্মীর নাম</label>
+        <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-xl" aria-hidden="true">🔍</span>
+        <input id="nameInput" type="text" autocomplete="off" autocapitalize="words" spellcheck="false"
+          placeholder="নাম লিখুন..."
+          role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions"
+          class="w-full rounded-2xl border-2 border-slate-200 bg-white py-4 pl-12 pr-12 text-lg shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/15" />
+        <button id="clearBtn" type="button" aria-label="নাম মুছুন"
+          class="absolute right-3 top-1/2 flex hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600">✕</button>
+        <ul id="suggestions" role="listbox" aria-label="মিলে যাওয়া নাম"
+          class="absolute z-30 mt-2 hidden max-h-80 w-full overflow-y-auto rounded-2xl border border-slate-100 bg-white py-1 shadow-xl"></ul>
+      </div>
+      <p id="hint" class="mt-3 text-center text-sm text-slate-500">💡 টাইপ করলেই অটো ফিল</p>
+
+      <!-- তথ্য কার্ড (সব অটো ফিল) -->
+      <div id="employeeCard" class="screen-enter mt-6 hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-lg">
+        <p class="flex items-center gap-2 text-lg font-bold text-slate-900">
+          <span aria-hidden="true">👤</span><span id="cardName" class="min-w-0 break-words"></span>
+        </p>
+        <dl class="mt-3 space-y-2 border-t border-slate-100 pt-3 text-[15px]">
+          <div class="flex items-center gap-2">
+            <dt aria-label="আইডি ও বিভাগ">🆔</dt>
+            <dd class="text-slate-700"><span id="cardEmpId" class="font-semibold"></span> • <span id="cardDept"></span></dd>
+          </div>
+          <div class="flex items-center gap-2">
+            <dt aria-label="ইমেইল">📧</dt>
+            <dd id="cardEmail" class="min-w-0 break-all text-slate-700"></dd>
+          </div>
+          <div class="flex items-center gap-2">
+            <dt aria-label="ফোন">📱</dt>
+            <dd id="cardPhone" class="text-slate-700"></dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- DONE / PENDING বাটন -->
+      <div id="ticketDetails" class="mt-5 hidden space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div>
+          <label for="problemInput" class="mb-1 block text-sm font-semibold text-slate-700">সমস্যার বিবরণ <span class="text-red-600">*</span></label>
+          <textarea id="problemInput" rows="3" maxlength="2000" aria-required="true"
+            placeholder="কী সমস্যা হচ্ছে, সংক্ষেপে লিখুন..."
+            class="w-full resize-y rounded-xl border border-slate-300 px-3 py-2 text-base outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"></textarea>
+          <p class="mt-1 text-xs text-slate-400">সর্বোচ্চ ২০০০ অক্ষর</p>
+        </div>
+        <div>
+          <label for="assignedToInput" class="mb-1 block text-sm font-semibold text-slate-700">Assignee <span class="font-normal text-slate-400">(ঐচ্ছিক)</span></label>
+          <input id="assignedToInput" type="text" maxlength="100" autocomplete="off"
+            placeholder="যার কাছে assign করবেন তার নাম"
+            class="w-full rounded-xl border border-slate-300 px-3 py-2 text-base outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" />
+        </div>
+      </div>
+
+      <div id="actionButtons" class="screen-enter mt-5 hidden space-y-3">
+        <button id="doneBtn" type="button"
+          class="w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 py-4 text-white shadow-lg shadow-emerald-600/25 transition hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-emerald-300">
+          <span class="block text-xl font-bold" data-label>✅&nbsp; DONE</span>
+          <span id="doneSub" class="block text-sm text-white/90">ইমেইল যাবে</span>
+        </button>
+        <button id="pendingBtn" type="button"
+          class="w-full rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 py-4 text-amber-950 shadow-lg shadow-amber-500/25 transition hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-amber-300">
+          <span class="block text-xl font-bold" data-label>⏳&nbsp; PENDING</span>
+          <span class="block text-sm text-amber-900/80">ইমেইল যাবে না</span>
+        </button>
+      </div>
+
+      <!-- পেন্ডিং টিকিট — পরে Done করার জন্য -->
+      <details id="pendingPanel" class="group mt-10 hidden rounded-2xl border border-amber-100 bg-white/80 shadow-sm">
+        <summary class="flex cursor-pointer list-none items-center justify-between rounded-2xl px-5 py-4 text-sm font-semibold text-amber-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">
+          <span>⏳ পেন্ডিং টিকিট <span id="pendingCount" class="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs">০</span></span>
+          <span class="transition group-open:rotate-180" aria-hidden="true">▾</span>
+        </summary>
+        <ul id="pendingList" class="divide-y divide-slate-100 border-t border-amber-100"></ul>
+      </details>
+    </section>
+
+    <!-- ===================== রেজাল্ট স্ক্রিন ===================== -->
+    <section id="resultScreen" class="hidden">
+      <article id="ticketCard" class="overflow-hidden rounded-2xl bg-white shadow-lg">
+        <div id="resultHeader" class="bg-gradient-to-br from-emerald-500 to-emerald-600 px-6 py-8 text-center text-white">
+          <div id="resultIcon" class="stamp mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/25 text-4xl" aria-hidden="true">✅</div>
+          <h2 id="resultTitle" class="mt-4 text-2xl font-bold">টিকিট সম্পন্ন!</h2>
+          <p id="resultSubtitle" class="mt-1 text-sm opacity-90"></p>
+        </div>
+
+        <div class="px-6 pb-5 pt-6 text-center">
+          <p class="text-sm font-medium text-slate-400">টিকিট নম্বর</p>
+          <p id="ticketNumber" class="mt-1 select-all break-all font-mono text-2xl font-bold tracking-wide text-blue-600 sm:text-3xl"></p>
+        </div>
+
+        <div class="ticket-cut px-6"><div class="border-t-2 border-dashed border-slate-200"></div></div>
+
+        <dl class="space-y-3 px-6 py-5 text-[15px]">
+          <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">👤 নাম</dt><dd id="rName" class="min-w-0 break-words text-right font-semibold text-slate-800"></dd></div>
+          <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">🆔 আইডি</dt><dd id="rEmpId" class="text-right font-semibold text-slate-800"></dd></div>
+          <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">🏢 বিভাগ</dt><dd id="rDept" class="text-right font-semibold text-slate-800"></dd></div>
+          <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">সমস্যা</dt><dd id="rProblem" class="max-w-[65%] whitespace-pre-wrap break-words text-right font-medium text-slate-700"></dd></div>
+          <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">Assignee</dt><dd id="rAssignee" class="text-right font-semibold text-slate-800"></dd></div>
+          <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">📧 ইমেইল</dt><dd id="rEmail" class="min-w-0 break-all text-right font-semibold text-slate-800"></dd></div>
+          <div class="flex items-center justify-between gap-4"><dt class="shrink-0 text-slate-500">📊 স্ট্যাটাস</dt><dd><span id="rStatus" class="inline-flex rounded-full px-3 py-1 text-xs font-bold"></span></dd></div>
+          <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">🕐 তৈরি</dt><dd id="rCreated" class="text-right font-semibold text-slate-800"></dd></div>
+        </dl>
+
+        <p id="pendingNote" class="mx-6 mb-5 hidden rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">💡 পরে Done করলে ইমেইল পাঠানো যাবে</p>
+
+        <div class="no-print grid grid-cols-2 gap-3 border-t border-slate-100 bg-slate-50/70 p-4">
+          <button id="printBtn" type="button"
+            class="rounded-2xl border-2 border-slate-200 bg-white py-3 font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600">🖨️ প্রিন্ট</button>
+          <button id="convertDoneBtn" type="button"
+            class="hidden rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 py-3 font-semibold text-white shadow-md transition hover:brightness-105 active:scale-[0.98] disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400">✅ Done করুন</button>
+          <button id="newTicketBtn" type="button"
+            class="rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 py-3 font-semibold text-white shadow-md transition hover:brightness-110 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400">➕ নতুন টিকিট</button>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+  (() => {
+    'use strict';
+
+    // ---------- DOM ----------
+    const $ = (id) => document.getElementById(id);
+    const el = {
+      homeScreen: $('homeScreen'), resultScreen: $('resultScreen'),
+      nameInput: $('nameInput'), clearBtn: $('clearBtn'), suggestions: $('suggestions'), hint: $('hint'),
+      employeeCard: $('employeeCard'), cardName: $('cardName'), cardEmpId: $('cardEmpId'), cardDept: $('cardDept'),
+      cardEmail: $('cardEmail'), cardPhone: $('cardPhone'),
+      ticketDetails: $('ticketDetails'), problemInput: $('problemInput'), assignedToInput: $('assignedToInput'),
+      actionButtons: $('actionButtons'), doneBtn: $('doneBtn'), pendingBtn: $('pendingBtn'), doneSub: $('doneSub'),
+      pendingPanel: $('pendingPanel'), pendingCount: $('pendingCount'), pendingList: $('pendingList'),
+      resultHeader: $('resultHeader'), resultIcon: $('resultIcon'), resultTitle: $('resultTitle'), resultSubtitle: $('resultSubtitle'),
+      ticketNumber: $('ticketNumber'), rName: $('rName'), rEmpId: $('rEmpId'), rDept: $('rDept'), rProblem: $('rProblem'), rAssignee: $('rAssignee'), rEmail: $('rEmail'),
+      rStatus: $('rStatus'), rCreated: $('rCreated'), pendingNote: $('pendingNote'),
+      printBtn: $('printBtn'), convertDoneBtn: $('convertDoneBtn'), newTicketBtn: $('newTicketBtn'),
+      toastBox: $('toastBox'), toastText: $('toastText'), toastIcon: $('toastIcon'),
+    };
+
+    const DEBOUNCE_MS = 200;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const state = {
+      selected: null,     // সিলেক্ট করা employee
+      matches: [],        // বর্তমান সাজেশন
+      activeIndex: -1,    // কীবোর্ডে হাইলাইট করা সাজেশন
+      searchSeq: 0,       // পুরনো সার্চ রেসপন্স বাদ দিতে
+      busy: false,
+      ticket: null,       // রেজাল্ট স্ক্রিনের টিকিট
+      pollToken: 0,       // ইমেইল স্ট্যাটাস পোলিং বাতিল করতে
+    };
+    let debounceTimer = null;
+
+    // ---------- ছোট হেল্পার ----------
+    const show = (node) => node.classList.remove('hidden');
+    const hide = (node) => node.classList.add('hidden');
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const toBnDigits = (v) => String(v).replace(/\d/g, (d) => '০১২৩৪৫৬৭৮৯'[d]);
+
+    let dateFmt;
+    try {
+      dateFmt = new Intl.DateTimeFormat('bn-BD', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Dhaka' });
+    } catch (_) {
+      dateFmt = new Intl.DateTimeFormat('bn-BD', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
+    const formatDate = (iso) => { const d = new Date(iso); return isNaN(d) ? '—' : dateFmt.format(d); };
+
+    async function api(path, options = {}) {
+      const opts = { ...options };
+      if (opts.body) opts.headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+      const res = await fetch(path, opts);
+      let data = {};
+      try { data = await res.json(); } catch (_) { /* JSON নয় */ }
+      return { ok: res.ok, status: res.status, data };
+    }
+
+    // ---------- টোস্ট ----------
+    let toastTimer = null;
+    function showToast(message, type = 'error') {
+      const isError = type === 'error';
+      el.toastText.textContent = message;
+      el.toastIcon.textContent = isError ? '⚠️' : 'ℹ️';
+      el.toastBox.classList.toggle('bg-red-600', isError);
+      el.toastBox.classList.toggle('bg-slate-800', !isError);
+      el.toastBox.classList.remove('-translate-y-24', 'opacity-0');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.toastBox.classList.add('-translate-y-24', 'opacity-0'), 3500);
+    }
+
+    // ---------- অটোকমপ্লিট ----------
+    function toggleClear() {
+      el.clearBtn.classList.toggle('hidden', el.nameInput.value.length === 0);
+    }
+
+    function showSuggestions() {
+      show(el.suggestions);
+      el.nameInput.setAttribute('aria-expanded', 'true');
+    }
+
+    function hideSuggestions() {
+      hide(el.suggestions);
+      el.nameInput.setAttribute('aria-expanded', 'false');
+      el.nameInput.removeAttribute('aria-activedescendant');
+      state.activeIndex = -1;
+    }
+
+    function appendHighlighted(parent, text, q) {
+      const idx = q ? text.toLowerCase().indexOf(q.toLowerCase()) : -1;
+      if (idx < 0) { parent.append(text); return; }
+      const mark = document.createElement('mark');
+      mark.className = 'rounded-sm bg-blue-100 text-blue-700';
+      mark.textContent = text.slice(idx, idx + q.length);
+      parent.append(text.slice(0, idx), mark, text.slice(idx + q.length));
+    }
+
+    function renderSuggestions(matches, q = '') {
+      state.matches = matches;
+      state.activeIndex = -1;
+      el.suggestions.replaceChildren();
+
+      if (matches.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'px-4 py-3 text-sm text-slate-500';
+        li.textContent = '😕 এই নামে কাউকে পাওয়া যায়নি — বানান দেখুন';
+        el.suggestions.append(li);
+        showSuggestions();
+        return;
+      }
+
+      // একই নাম একাধিকবার থাকলে ব্যাজ দেখাই, যাতে ID/বিভাগ দেখে বাছা যায়
+      const nameCount = {};
+      matches.forEach((m) => { const k = m.Name.toLowerCase(); nameCount[k] = (nameCount[k] || 0) + 1; });
+
+      matches.forEach((emp, i) => {
+        const li = document.createElement('li');
+        li.id = 'opt-' + i;
+        li.setAttribute('role', 'option');
+        li.setAttribute('aria-selected', 'false');
+        li.className = 'cursor-pointer px-4 py-3 transition-colors hover:bg-blue-50 aria-selected:bg-blue-50';
+
+        const nameRow = document.createElement('p');
+        nameRow.className = 'flex flex-wrap items-center gap-2 font-semibold text-slate-800';
+        const nameSpan = document.createElement('span');
+        appendHighlighted(nameSpan, emp.Name, q);
+        nameRow.append(nameSpan);
+        if (nameCount[emp.Name.toLowerCase()] > 1) {
+          const badge = document.createElement('span');
+          badge.className = 'rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800';
+          badge.textContent = 'একই নাম';
+          nameRow.append(badge);
+        }
+
+        const meta = document.createElement('p');
+        meta.className = 'mt-0.5 text-sm text-slate-500';
+        meta.textContent = `${emp.EmployeeID || '—'} • ${emp.Department || '—'}`;
+
+        li.append(nameRow, meta);
+        li.addEventListener('mousedown', (e) => e.preventDefault()); // ইনপুট blur হতে দেবে না
+        li.addEventListener('click', () => selectEmployee(emp));
+        el.suggestions.append(li);
+      });
+      showSuggestions();
+    }
+
+    async function searchEmployees(q) {
+      const seq = ++state.searchSeq;
+      try {
+        const { ok, data } = await api('/api/search?q=' + encodeURIComponent(q));
+        if (seq !== state.searchSeq) return; // এর মধ্যে আরও টাইপ হয়েছে
+        if (!ok) throw new Error(data.error || 'search failed');
+        renderSuggestions(Array.isArray(data.matches) ? data.matches : [], q);
+      } catch (_) {
+        if (seq === state.searchSeq) showToast('খোঁজা যায়নি — সার্ভার চালু আছে কিনা দেখুন');
+      }
+    }
+
+    function moveActive(delta) {
+      const items = el.suggestions.querySelectorAll('[role="option"]');
+      const n = items.length;
+      if (!n) return;
+      state.activeIndex = state.activeIndex < 0
+        ? (delta > 0 ? 0 : n - 1)
+        : (state.activeIndex + delta + n) % n;
+      items.forEach((li, i) => li.setAttribute('aria-selected', String(i === state.activeIndex)));
+      const active = items[state.activeIndex];
+      el.nameInput.setAttribute('aria-activedescendant', active.id);
+      active.scrollIntoView({ block: 'nearest' });
+    }
+
+    el.nameInput.addEventListener('input', () => {
+      if (state.selected && el.nameInput.value !== state.selected.Name) clearSelection();
+      toggleClear();
+      clearTimeout(debounceTimer);
+      const q = el.nameInput.value.trim();
+      if (!q) { state.searchSeq++; hideSuggestions(); return; }
+      debounceTimer = setTimeout(() => searchEmployees(q), DEBOUNCE_MS);
+    });
+
+    el.nameInput.addEventListener('keydown', (e) => {
+      const open = !el.suggestions.classList.contains('hidden') && state.matches.length > 0;
+      if (e.key === 'ArrowDown' && open) { e.preventDefault(); moveActive(1); }
+      else if (e.key === 'ArrowUp' && open) { e.preventDefault(); moveActive(-1); }
+      else if (e.key === 'Enter' && open) {
+        e.preventDefault();
+        const i = state.activeIndex >= 0 ? state.activeIndex : (state.matches.length === 1 ? 0 : -1);
+        if (i >= 0) selectEmployee(state.matches[i]);
+      } else if (e.key === 'Escape') {
+        hideSuggestions();
+      }
+    });
+
+    el.nameInput.addEventListener('blur', () => setTimeout(hideSuggestions, 120));
+    el.nameInput.addEventListener('focus', () => {
+      if (!state.selected && el.nameInput.value.trim() && el.suggestions.children.length) showSuggestions();
+    });
+
+    el.clearBtn.addEventListener('click', () => {
+      el.nameInput.value = '';
+      state.searchSeq++;
+      clearSelection();
+      hideSuggestions();
+      toggleClear();
+      el.nameInput.focus();
+    });
+
+    // ---------- সিলেকশন ----------
+    function selectEmployee(emp) {
+      state.selected = emp;
+      el.nameInput.value = emp.Name;
+      toggleClear();
+      hideSuggestions();
+
+      el.cardName.textContent = emp.Name;
+      el.cardEmpId.textContent = emp.EmployeeID || '—';
+      el.cardDept.textContent = emp.Department || '—';
+      if (emp.Email) {
+        el.cardEmail.textContent = emp.Email;
+        el.cardEmail.className = 'min-w-0 break-all text-slate-700';
+      } else {
+        el.cardEmail.textContent = 'ইমেইল ঠিকানা নেই';
+        el.cardEmail.className = 'min-w-0 break-all font-medium text-amber-700';
+      }
+      el.cardPhone.textContent = emp.Phone || '—';
+      el.doneSub.textContent = emp.Email ? 'ইমেইল যাবে' : 'ইমেইল ঠিকানা নেই — শুধু সেভ হবে';
+
+      hide(el.hint);
+      show(el.employeeCard);
+      show(el.ticketDetails);
+      show(el.actionButtons);
+      el.nameInput.blur(); // মোবাইলে কীবোর্ড বন্ধ
+      el.actionButtons.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'nearest' });
+    }
+
+    function clearSelection() {
+      state.selected = null;
+      hide(el.employeeCard);
+      hide(el.ticketDetails);
+      hide(el.actionButtons);
+      show(el.hint);
+    }
+
+    // ---------- টিকিট তৈরি ----------
+    function setBusy(on, activeBtn) {
+      state.busy = on;
+      [el.doneBtn, el.pendingBtn].forEach((b) => { b.disabled = on; });
+      const label = activeBtn && activeBtn.querySelector('[data-label]');
+      if (!label) return;
+      if (on) {
+        label.dataset.original = label.innerHTML;
+        label.textContent = '⏳ সেভ হচ্ছে…';
+      } else if (label.dataset.original) {
+        label.innerHTML = label.dataset.original;
+      }
+    }
+
+    async function submitTicket(status) {
+      if (!state.selected || state.busy) return;
+      if (!el.problemInput.value.trim()) {
+        showToast('সমস্যার বিবরণ লিখুন');
+        el.problemInput.focus();
+        return;
+      }
+      const btn = status === 'done' ? el.doneBtn : el.pendingBtn;
+      setBusy(true, btn);
+      try {
+        const { status: code, data } = await api('/api/tickets', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: state.selected.Name,
+            employee_id: state.selected.EmployeeID,
+            status,
+            problem: el.problemInput.value.trim(),
+            assigned_to: el.assignedToInput.value.trim(),
+          }),
+        });
+        if (code === 201) { showResult(data); loadPending(); return; }
+
+        if (code === 409 && Array.isArray(data.matches)) {
+          // একই নামে একাধিক — তালিকা দেখিয়ে বাছতে দাও
+          clearSelection();
+          renderSuggestions(data.matches, el.nameInput.value.trim());
+          el.nameInput.focus();
+        }
+        showToast(data.error || `টিকিট তৈরি হয়নি (কোড ${code})`);
+      } catch (_) {
+        showToast('সার্ভারে পৌঁছানো যায়নি — ইন্টারনেট সংযোগ দেখুন');
+      } finally {
+        setBusy(false, btn);
+      }
+    }
+
+    // ---------- রেজাল্ট স্ক্রিন ----------
+    const THEMES = {
+      done: {
+        header: 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white',
+        icon: '✅', title: 'টিকিট সম্পন্ন!',
+        badge: 'bg-emerald-100 text-emerald-700', badgeText: '✅ সম্পন্ন',
+      },
+      pending: {
+        header: 'bg-gradient-to-br from-amber-400 to-amber-500 text-amber-950',
+        icon: '⏳', title: 'পেন্ডিং রাখা হলো',
+        badge: 'bg-amber-100 text-amber-800', badgeText: '⏳ পেন্ডিং',
+      },
+    };
+
+    function emailMessage(t) {
+      if (t.email_sent_at) return '📧 ইমেইল পাঠানো হয়েছে';
+      if (t.email_queued) return '📧 ইমেইল পাঠানো হচ্ছে…';
+      if (!(t.employee && t.employee.Email)) return '📭 ইমেইল ঠিকানা নেই — মেইল যায়নি';
+      return '📭 ইমেইল সার্ভার সেট করা নেই — মেইল যায়নি';
+    }
+
+    function replayAnimation(node, cls) {
+      node.classList.remove(cls);
+      void node.offsetWidth; // reflow করে অ্যানিমেশন রিস্টার্ট
+      node.classList.add(cls);
+    }
+
+    function showResult(t) {
+      state.ticket = t;
+      state.pollToken++;
+      const emp = t.employee || {};
+      const isDone = t.status === 'done';
+      const theme = THEMES[isDone ? 'done' : 'pending'];
+
+      el.resultHeader.className = `${theme.header} px-6 py-8 text-center`;
+      el.resultIcon.textContent = theme.icon;
+      el.resultTitle.textContent = theme.title;
+      el.resultSubtitle.textContent = isDone ? emailMessage(t) : '📭 ইমেইল যাবে না';
+
+      el.ticketNumber.textContent = t.ticket_number;
+      el.rName.textContent = emp.Name || '—';
+      el.rEmpId.textContent = emp.EmployeeID || '—';
+      el.rDept.textContent = emp.Department || '—';
+      el.rProblem.textContent = t.problem || '—';
+      el.rAssignee.textContent = t.assigned_to || 'Assign করা হয়নি';
+      el.rEmail.textContent = emp.Email || '—';
+      el.rStatus.className = `inline-flex rounded-full px-3 py-1 text-xs font-bold ${theme.badge}`;
+      el.rStatus.textContent = theme.badgeText;
+      el.rCreated.textContent = formatDate(t.created_at);
+
+      el.pendingNote.classList.toggle('hidden', isDone);
+      el.printBtn.classList.toggle('hidden', !isDone);
+      el.convertDoneBtn.classList.toggle('hidden', isDone);
+
+      hideSuggestions();
+      hide(el.homeScreen);
+      show(el.resultScreen);
+      replayAnimation(el.resultScreen, 'screen-enter');
+      replayAnimation(el.resultIcon, 'stamp');
+      window.scrollTo({ top: 0 });
+
+      if (isDone && t.email_queued && !t.email_sent_at) pollEmailStatus(t.id, state.pollToken);
+    }
+
+    // ইমেইল ব্যাকগ্রাউন্ডে যায় — কয়েক সেকেন্ড পরপর দেখি পৌঁছেছে কিনা
+    async function pollEmailStatus(id, token) {
+      for (let attempt = 0; attempt < 12; attempt++) {
+        await sleep(3000);
+        if (token !== state.pollToken) return;
+        try {
+          const { ok, data } = await api('/api/tickets/' + encodeURIComponent(id));
+          if (token !== state.pollToken) return;
+          if (ok && data.email_sent_at) {
+            state.ticket.email_sent_at = data.email_sent_at;
+            el.resultSubtitle.textContent = '📧 ইমেইল পাঠানো হয়েছে';
+            return;
+          }
+        } catch (_) { /* পরের বার আবার দেখব */ }
+      }
+      if (token === state.pollToken) {
+        el.resultSubtitle.textContent = '⚠️ ইমেইল এখনো নিশ্চিত হয়নি — সার্ভার লগ দেখুন';
+      }
+    }
+
+    // ---------- Pending → Done ----------
+    async function convertToDone(id, btn) {
+      if (state.busy) return;
+      state.busy = true;
+      const original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '⏳ হচ্ছে…';
+      try {
+        const { ok, status, data } = await api(`/api/tickets/${encodeURIComponent(id)}/done`, { method: 'POST' });
+        if (ok && data.ticket) {
+          showResult(data.ticket);
+          if (data.already_done) showToast(data.message, 'info');
+          loadPending();
+          return;
+        }
+        showToast(data.error || `Done করা যায়নি (কোড ${status})`);
+      } catch (_) {
+        showToast('সার্ভারে পৌঁছানো যায়নি — ইন্টারনেট সংযোগ দেখুন');
+      } finally {
+        state.busy = false;
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    }
+
+    // ---------- পেন্ডিং তালিকা ----------
+    function renderPendingItem(t) {
+      const li = document.createElement('li');
+      li.className = 'flex items-center gap-3 px-5 py-3';
+
+      const info = document.createElement('button');
+      info.type = 'button';
+      info.className = 'min-w-0 flex-1 rounded-lg text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500';
+      info.setAttribute('aria-label', `${t.employee.Name} — টিকিট দেখুন`);
+      const name = document.createElement('p');
+      name.className = 'truncate font-semibold text-slate-800';
+      name.textContent = t.employee.Name;
+      const meta = document.createElement('p');
+      meta.className = 'truncate text-xs text-slate-500';
+      meta.textContent = `${t.ticket_number} • ${formatDate(t.created_at)}`;
+      info.append(name, meta);
+      info.addEventListener('click', () => showResult(t));
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'shrink-0 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400';
+      btn.textContent = '✅ Done';
+      btn.addEventListener('click', () => convertToDone(t.id, btn));
+
+      li.append(info, btn);
+      return li;
+    }
+
+    async function loadPending() {
+      try {
+        const { ok, data } = await api('/api/tickets?status=pending&limit=20');
+        if (!ok) return;
+        const list = Array.isArray(data.tickets) ? data.tickets : [];
+        el.pendingCount.textContent = toBnDigits(data.total ?? list.length);
+        el.pendingList.replaceChildren(...list.map(renderPendingItem));
+        el.pendingPanel.classList.toggle('hidden', list.length === 0);
+      } catch (_) { /* পেন্ডিং তালিকা ঐচ্ছিক — চুপচাপ বাদ */ }
+    }
+
+    // ---------- রিসেট ----------
+    function resetForm() {
+      state.pollToken++;
+      state.ticket = null;
+      state.searchSeq++;
+      el.nameInput.value = '';
+      el.problemInput.value = '';
+      el.assignedToInput.value = '';
+      clearSelection();
+      hideSuggestions();
+      toggleClear();
+      hide(el.resultScreen);
+      show(el.homeScreen);
+      replayAnimation(el.homeScreen, 'screen-enter');
+      window.scrollTo({ top: 0 });
+      el.nameInput.focus();
+      loadPending();
+    }
+
+    // ---------- ইভেন্ট ----------
+    el.doneBtn.addEventListener('click', () => submitTicket('done'));
+    el.pendingBtn.addEventListener('click', () => submitTicket('pending'));
+    el.convertDoneBtn.addEventListener('click', () => {
+      if (state.ticket) convertToDone(state.ticket.id, el.convertDoneBtn);
+    });
+    el.printBtn.addEventListener('click', () => window.print());
+    el.newTicketBtn.addEventListener('click', resetForm);
+
+    // শুরুতে
+    loadPending();
+    if (window.matchMedia('(pointer: fine)').matches) el.nameInput.focus();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+.env
+employees.xlsx
+*.db
+*.db-shm
+*.db-wal
+.DS_Store

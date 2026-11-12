@@ -109,6 +109,22 @@ func (h *Handler) assistantStatus(c *gin.Context) {
 type assistantChatRequest struct {
 	Messages           []groqapi.Message `json:"messages"`
 	SelectedEmployeeID string            `json:"selected_employee_id"`
+	SelectedAssignee   string            `json:"selected_assignee"`
+}
+
+var assistantAssignees = []string{
+	"Rupok Kumar Roy", "Towhedul Islam", "Md. Imam Hossan Chowdhury",
+	"Muhammad Fokhrul Hasan", "Md. Tanvir Ahamed Sarkar", "Md. Fahad Hossen",
+	"Mabubul Alam Patwary",
+}
+
+func resolveAssistantAssignee(value string) string {
+	for _, name := range assistantAssignees {
+		if normalizeAssistantValue(name) == normalizeAssistantValue(value) {
+			return name
+		}
+	}
+	return ""
 }
 
 func normalizeAssistantValue(value string) string {
@@ -170,6 +186,16 @@ func (h *Handler) assistantChat(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"reply": "Assignee-এর নাম ১০০ অক্ষরের মধ্যে লিখুন।"})
 		return
 	}
+	selectedAssignee := strings.TrimSpace(request.SelectedAssignee)
+	if selectedAssignee != "" {
+		details.Assignee = resolveAssistantAssignee(selectedAssignee)
+		if details.Assignee == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "selected assignee is invalid; choose an IT Team member"})
+			return
+		}
+	} else if details.Assignee != "" {
+		details.Assignee = resolveAssistantAssignee(details.Assignee)
+	}
 	if details.Problem == "" {
 		reply := "সমস্যাটি কী হচ্ছে, একটু বিস্তারিত লিখুন।"
 		if details.EmployeeName == "" {
@@ -178,7 +204,6 @@ func (h *Handler) assistantChat(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"reply": reply})
 		return
 	}
-
 	var employee domain.Employee
 	if employeeID := strings.TrimSpace(request.SelectedEmployeeID); employeeID != "" {
 		matches := h.tickets.SearchEmployees(employeeID, usecase.MaxSearchResults)
@@ -220,6 +245,10 @@ func (h *Handler) assistantChat(c *gin.Context) {
 	}
 	if details.Problem == "" {
 		c.JSON(http.StatusOK, gin.H{"reply": "কী সমস্যা হচ্ছে, একটু বিস্তারিত লিখবেন?"})
+		return
+	}
+	if details.Assignee == "" {
+		c.JSON(http.StatusOK, gin.H{"reply": "সমস্যাটি বুঝেছি। কোন IT Team member-এর কাছে assign করব? নিচের তালিকা থেকে একজনকে বেছে নিন।", "needs_assignee": true})
 		return
 	}
 	ticket, emailQueued, err := h.tickets.Create(c.Request.Context(), usecase.CreateTicketInput{

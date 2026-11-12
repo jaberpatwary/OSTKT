@@ -367,6 +367,7 @@
     let assistantEnabled = false;
     let assistantSelectedEmployeeID = '';
     let assistantSelectedEmployeeName = '';
+    let assistantConversationEmployeeID = '';
     let assistantSearchSequence = 0;
     let assistantSearchTimer = null;
     const assistantAssignees = [
@@ -483,13 +484,8 @@
         option.className = 'block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-violet-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-500';
         option.textContent = `👤 ${name}`;
         option.addEventListener('click', () => {
-          const current = el.assistantInput.value;
-          const marker = /\b(?:assign(?:ed|ee)?|assing)\b(?:\s+(?:to|by))?\s*.*$/i;
-          const found = current.match(marker);
-          const prefix = found ? current.slice(0, found.index).trimEnd() : current.trimEnd();
-          el.assistantInput.value = `${prefix}${prefix ? ' ' : ''}assign to ${name}`;
           hide(el.assistantAssigneeOptions);
-          el.assistantInput.focus();
+          sendAssistantMessage(`Assignee নির্বাচন: ${name}`, name);
         });
         return option;
       }));
@@ -523,7 +519,10 @@
             const name = document.createElement('span'); name.className = 'block text-xs font-semibold text-slate-800'; name.textContent = employee.Name || '';
             const meta = document.createElement('span'); meta.className = 'mt-0.5 block text-[10px] text-slate-500'; meta.textContent = `ID ${employee.EmployeeID || '—'} · ${employee.Department || '—'}`;
             option.append(name, meta);
-            option.addEventListener('click', () => { setAssistantEmployee(employee); el.assistantInput.focus(); });
+            option.addEventListener('click', () => {
+              setAssistantEmployee(employee);
+              sendAssistantMessage(`কর্মী নির্বাচন: ${employee.Name} (ID ${employee.EmployeeID})`);
+            });
             return option;
           }));
           el.assistantEmployeeOptions.classList.toggle('hidden', matches.length === 0);
@@ -554,7 +553,7 @@
       el.assistantPreviewNotice.classList.toggle('hidden', assistantEnabled);
     }
 
-    async function sendAssistantMessage(messageText) {
+    async function sendAssistantMessage(messageText, selectedAssignee = '') {
       if (!assistantEnabled || el.assistantSend.disabled) return;
       const content = String(messageText || el.assistantInput.value).trim();
       if (!content || content.length > 1200) return;
@@ -565,6 +564,7 @@
       const selectedEmployeeID = assistantSelectedEmployeeID;
       const selectedEmployeeName = assistantSelectedEmployeeName;
       if (selectedEmployeeID && selectedEmployeeName) {
+        assistantConversationEmployeeID = selectedEmployeeID;
         const selectionMessage = `Employee selected by user: ${selectedEmployeeName}, employee ID ${selectedEmployeeID}.`;
         assistantConversation.push({ role: 'user', content: selectionMessage });
         appendAssistantMessage('user', `কর্মী বেছে নিয়েছি: ${selectedEmployeeName} · ID ${selectedEmployeeID}`);
@@ -576,7 +576,7 @@
       try {
         const { ok, status, data } = await api('/api/assistant', {
           method: 'POST',
-          body: JSON.stringify({ messages: assistantConversation, selected_employee_id: selectedEmployeeID }),
+          body: JSON.stringify({ messages: assistantConversation, selected_employee_id: selectedEmployeeID || assistantConversationEmployeeID, selected_assignee: selectedAssignee }),
         });
         if (!ok) throw new Error(data.error || `Chat request failed (${status})`);
         const reply = data.reply || 'আর কোনো তথ্য লাগলে লিখুন।';
@@ -585,13 +585,19 @@
         if (data.created && data.ticket) {
           appendAssistantTicket(data.ticket);
           assistantConversation.length = 0;
+          assistantConversationEmployeeID = '';
           loadPending();
           loadDashboard();
           el.assistantStatus.textContent = 'Ticket তৈরি সম্পন্ন · নতুন ticket-এর জন্য লিখতে থাকুন';
         } else {
           assistantConversation.push({ role: 'assistant', content: reply });
           appendAssistantCandidates(data.matches);
-          el.assistantStatus.textContent = 'কর্মীর নাম ও সমস্যাটি নিশ্চিত করে লিখুন';
+          if (data.needs_assignee) {
+            renderAssistantAssignees('');
+            el.assistantStatus.textContent = 'IT Team থেকে একজন assignee বেছে নিন';
+          } else {
+            el.assistantStatus.textContent = 'কর্মীর নাম ও সমস্যাটি নিশ্চিত করে লিখুন';
+          }
         }
       } catch (error) {
         appendAssistantMessage('assistant', error.message || 'Chat service-এ সংযোগ করা যায়নি।');

@@ -77,71 +77,37 @@
 
     <!-- ===================== হোম স্ক্রিন ===================== -->
     <section id="homeScreen" class="screen-enter">
-      <section aria-labelledby="dashboardTitle" class="mx-auto mb-8 max-w-6xl rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-xl shadow-slate-200/50 sm:p-6">
+      <section aria-labelledby="dashboardTitle" class="mx-auto mb-8 max-w-6xl rounded-[2rem] border border-slate-200 bg-slate-50 p-4 shadow-2xl shadow-slate-300/40 sm:p-7">
         <header class="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p class="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">WORKSPACE OVERVIEW</p>
-            <h2 id="dashboardTitle" class="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">Ticket Dashboard</h2>
-            <p class="mt-1 text-sm text-slate-500">Ticket activity ও status এক নজরে</p>
+            <p class="text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">IT SERVICE OPERATIONS</p>
+            <h2 id="dashboardTitle" class="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">Ticket Resolving Dashboard</h2>
+            <p class="mt-1 text-sm text-slate-500">Support load, issue trends, resolution progress এবং team activity</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <span id="dashboardUpdated" class="mr-1 text-xs text-slate-400">লোড হচ্ছে…</span>
-            <button id="dashboardRefresh" type="button" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">↻ Refresh</button>
-            <a href="/admin" class="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700">Admin Panel</a>
+            <button id="dashboardRefresh" type="button" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60">↻ Refresh</button>
+            <a href="/admin" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-700">Manage tickets ↗</a>
           </div>
         </header>
 
-        <div class="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <article class="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4">
-            <p class="text-sm font-medium text-blue-700">মোট টিকিট</p>
-            <p id="dashTotal" class="mt-2 text-3xl font-bold tracking-tight text-slate-900">—</p>
-            <p class="mt-1 text-xs text-slate-500">সব status মিলিয়ে</p>
+        <div class="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-slate-500">Total tickets</p><p id="dashTotal" class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">—</p><p class="mt-1 text-xs text-slate-400">All recorded requests</p>
           </article>
-          <article class="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-4">
-            <p class="text-sm font-medium text-amber-800">Pending</p>
-            <p id="dashPending" class="mt-2 text-3xl font-bold tracking-tight text-slate-900">—</p>
-            <p class="mt-1 text-xs text-slate-500">কাজ বাকি আছে</p>
+          <article class="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-amber-700">Open / Pending</p><p id="dashPending" class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">—</p><p class="mt-1 text-xs text-slate-400">Waiting for resolution</p>
           </article>
-          <article class="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-4">
-            <p class="text-sm font-medium text-emerald-800">Done</p>
-            <p id="dashDone" class="mt-2 text-3xl font-bold tracking-tight text-slate-900">—</p>
-            <p class="mt-1 text-xs text-slate-500">সম্পন্ন হয়েছে</p>
+          <article class="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-emerald-700">Resolved</p><p id="dashDone" class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">—</p><p class="mt-1 text-xs text-slate-400">Successfully completed</p>
           </article>
-          <article class="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-4">
-            <p class="text-sm font-medium text-violet-800">আজকের টিকিট</p>
-            <p id="dashToday" class="mt-2 text-3xl font-bold tracking-tight text-slate-900">—</p>
-            <p class="mt-1 text-xs text-slate-500">আজ তৈরি হয়েছে</p>
+          <article class="rounded-2xl border border-cyan-100 bg-white p-4 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-cyan-700">Created today</p><p id="dashToday" class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">—</p><p class="mt-1 text-xs text-slate-400">New support requests</p>
           </article>
         </div>
 
-        <div class="mt-4 grid gap-4 lg:grid-cols-5">
-          <section class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 lg:col-span-3">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <h3 class="font-bold text-slate-800">গত ৭ দিনের activity</h3>
-                <p class="text-xs text-slate-500">প্রতিদিন তৈরি হওয়া ticket</p>
-              </div>
-              <div class="min-w-28 text-right">
-                <p class="text-xs text-slate-500">Completion rate</p>
-                <p id="dashCompletionRate" class="font-bold text-emerald-700">—</p>
-              </div>
-            </div>
-            <div id="dashboardChart" class="mt-4 grid h-32 grid-cols-7 items-end gap-2" aria-label="গত ৭ দিনের টিকিট চার্ট"></div>
-            <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
-              <div id="dashboardProgress" class="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all" style="width:0%"></div>
-            </div>
-          </section>
-          <section class="rounded-2xl border border-slate-200 bg-white p-4 lg:col-span-2">
-            <div class="flex items-center justify-between gap-2">
-              <div>
-                <h3 class="font-bold text-slate-800">সাম্প্রতিক টিকিট</h3>
-                <p class="text-xs text-slate-500">সর্বশেষ ৫টি</p>
-              </div>
-              <a href="/admin" class="text-xs font-semibold text-blue-700 hover:underline">সব দেখুন →</a>
-            </div>
-            <ul id="dashboardRecent" class="mt-2 divide-y divide-slate-100"></ul>
-            <p id="dashboardEmpty" class="hidden py-6 text-center text-sm text-slate-400">এখনো কোনো টিকিট নেই</p>
-          </section>
+        <div class="mt-4 grid gap-4 xl:grid-cols-3">
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div class="flex items-start justify-between"><div><h3 class="font-bold text-slate-800">Support status</h3><p class="text-xs text-slate-400">Resolved vs open tickets</p></div><span id="dashCompletionRate" class="rounded-full bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700">—</span></div><div class="mt-3 flex items-center justify-center gap-4"><svg id="statusDonut" viewBox="0 0 160 160" class="h-40 w-40 -rotate-90" role="img" aria-label="Ticket status distribution"><circle cx="80" cy="80" r="58" fill="none" stroke="#e2e8f0" stroke-width="22"/><circle id="donutDone" cx="80" cy="80" r="58" fill="none" stroke="#18a66a" stroke-width="22" stroke-dasharray="0 365"/><circle id="donutPending" cx="80" cy="80" r="58" fill="none" stroke="#f4ad28" stroke-width="22" stroke-dasharray="0 365" stroke-dashoffset="-365"/></svg><div class="space-y-3 text-xs"><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Resolved <strong id="donutDoneLabel" class="ml-1 text-slate-800">—</strong></p><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-amber-400"></span>Open <strong id="donutPendingLabel" class="ml-1 text-slate-800">—</strong></p><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-slate-200"></span>Total <strong id="donutTotalLabel" class="ml-1 text-slate-800">—</strong></p></div></div><div class="h-2 overflow-hidden rounded-full bg-slate-100"><div id="dashboardProgress" class="h-full rounded-full bg-emerald-500 transition-all" style="width:0%"></div></div></section>
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div class="flex flex-wrap items-start justify-between gap-2"><div><h3 class="font-bold text-slate-800">Tickets by issue type</h3><p class="text-xs text-slate-400">Open and resolved volume</p></div><div class="flex gap-2 text-[10px]"><span class="text-emerald-600">● Resolved</span><span class="text-cyan-600">● Open</span></div></div><div id="issueTypeChart" class="mt-4 space-y-3" aria-label="Ticket issue type chart"></div></section>
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div><h3 class="font-bold text-slate-800">Resolved by category</h3><p class="text-xs text-slate-400">Top recurring categories</p></div><div id="categoryChart" class="mt-4 flex h-44 items-end justify-around gap-2 border-b border-slate-100 pb-1" aria-label="Resolved ticket categories"></div></section>
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-3"><div class="flex flex-wrap items-start justify-between gap-3"><div><h3 class="font-bold text-slate-800">Monthly ticket volume by current status</h3><p class="text-xs text-slate-400">Tickets created in each month · last 12 months</p></div><div class="flex gap-4 text-xs"><span class="text-amber-600">● Resolved</span><span class="text-cyan-700">● Open</span></div></div><div id="monthlyChart" class="mt-3 overflow-hidden" aria-label="Monthly ticket trend"></div></section>
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-3"><div class="flex items-center justify-between gap-2"><div><h3 class="font-bold text-slate-800">Recent tickets</h3><p class="text-xs text-slate-400">Latest support requests and assignees</p></div><a href="/admin" class="text-xs font-semibold text-blue-700 hover:underline">Open ticket manager →</a></div><ul id="dashboardRecent" class="mt-2 grid gap-x-6 divide-y divide-slate-100 md:grid-cols-2 md:divide-y-0"></ul><p id="dashboardEmpty" class="hidden py-6 text-center text-sm text-slate-400">এখনো কোনো টিকিট নেই</p></section>
         </div>
         <p id="dashboardError" role="status" class="mt-3 hidden rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
       </section>
@@ -287,8 +253,11 @@
       actionButtons: $('actionButtons'), doneBtn: $('doneBtn'), pendingBtn: $('pendingBtn'), doneSub: $('doneSub'),
       pendingPanel: $('pendingPanel'), pendingCount: $('pendingCount'), pendingList: $('pendingList'),
       dashTotal: $('dashTotal'), dashPending: $('dashPending'), dashDone: $('dashDone'), dashToday: $('dashToday'),
-      dashboardChart: $('dashboardChart'), dashboardRecent: $('dashboardRecent'), dashboardEmpty: $('dashboardEmpty'),
+      dashboardRecent: $('dashboardRecent'), dashboardEmpty: $('dashboardEmpty'),
       dashboardCompletionRate: $('dashCompletionRate'), dashboardProgress: $('dashboardProgress'),
+      donutDone: $('donutDone'), donutPending: $('donutPending'), donutDoneLabel: $('donutDoneLabel'),
+      donutPendingLabel: $('donutPendingLabel'), donutTotalLabel: $('donutTotalLabel'), issueTypeChart: $('issueTypeChart'),
+      categoryChart: $('categoryChart'), monthlyChart: $('monthlyChart'),
       dashboardUpdated: $('dashboardUpdated'), dashboardRefresh: $('dashboardRefresh'), dashboardError: $('dashboardError'),
       resultHeader: $('resultHeader'), resultIcon: $('resultIcon'), resultTitle: $('resultTitle'), resultSubtitle: $('resultSubtitle'),
       ticketNumber: $('ticketNumber'), rName: $('rName'), rEmpId: $('rEmpId'), rDept: $('rDept'), rProblem: $('rProblem'), rAssignee: $('rAssignee'), rEmail: $('rEmail'),
@@ -338,34 +307,76 @@
       return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
     }
 
-    function renderDashboardChart(tickets) {
-      const days = Array.from({ length: 7 }, (_, i) => {
-        const date = new Date();
-        date.setDate(date.getDate() - (6 - i));
-        return { date, key: dhakaDateKey(date), count: 0 };
-      });
-      const counts = new Map(days.map((day) => [day.key, day]));
+    function issueCategory(ticket) {
+      const text = `${ticket.problem || ''} ${ticket.employee?.Department || ''}`.toLowerCase();
+      if (/network|wifi|wi-fi|internet|lan|router|connect/.test(text)) return 'Network';
+      if (/email|mail|outlook|gmail/.test(text)) return 'Email';
+      if (/printer|print|scanner/.test(text)) return 'Printer';
+      if (/account|password|login|access|permission/.test(text)) return 'Account & access';
+      if (/software|application|app|system|windows|office/.test(text)) return 'Software';
+      if (/pc|computer|laptop|monitor|keyboard|mouse|hardware|device/.test(text)) return 'Hardware';
+      return 'Other';
+    }
+
+    function renderIssueTypeChart(tickets) {
+      const categories = new Map();
       tickets.forEach((ticket) => {
-        const day = counts.get(dhakaDateKey(new Date(ticket.created_at)));
-        if (day) day.count++;
+        const name = issueCategory(ticket);
+        const item = categories.get(name) || { name, open: 0, resolved: 0, total: 0 };
+        item[ticket.status === 'done' ? 'resolved' : 'open']++;
+        item.total++;
+        categories.set(name, item);
       });
-      const peak = Math.max(1, ...days.map((day) => day.count));
-      el.dashboardChart.replaceChildren(...days.map((day) => {
-        const column = document.createElement('div');
-        column.className = 'flex h-full min-w-0 flex-col items-center justify-end gap-1';
-        const count = document.createElement('span');
-        count.className = 'text-[10px] font-semibold text-slate-500';
-        count.textContent = String(day.count);
-        const bar = document.createElement('div');
-        bar.className = 'w-full max-w-8 rounded-t-md bg-gradient-to-t from-blue-600 to-cyan-400 transition-all';
-        bar.style.height = `${Math.max(day.count ? 10 : 3, day.count / peak * 74)}%`;
-        bar.title = `${day.key}: ${day.count}`;
-        const label = document.createElement('span');
-        label.className = 'text-[10px] text-slate-400';
-        label.textContent = new Intl.DateTimeFormat('bn-BD', { weekday: 'short', timeZone: 'Asia/Dhaka' }).format(day.date);
-        column.append(count, bar, label);
-        return column;
+      const rows = [...categories.values()].sort((a, b) => b.total - a.total).slice(0, 5);
+      const max = Math.max(1, ...rows.map((row) => row.total));
+      el.issueTypeChart.replaceChildren(...rows.map((row) => {
+        const wrap = document.createElement('div');
+        const head = document.createElement('div');
+        head.className = 'mb-1 flex justify-between text-xs';
+        const name = document.createElement('span'); name.className = 'font-medium text-slate-600'; name.textContent = row.name;
+        const total = document.createElement('strong'); total.className = 'text-slate-800'; total.textContent = String(row.total);
+        head.append(name, total);
+        const track = document.createElement('div'); track.className = 'flex h-5 overflow-hidden rounded-md bg-slate-100';
+        const resolved = document.createElement('div'); resolved.className = 'bg-emerald-500'; resolved.style.width = `${row.resolved / max * 100}%`; resolved.title = `Resolved: ${row.resolved}`;
+        const open = document.createElement('div'); open.className = 'bg-cyan-500'; open.style.width = `${row.open / max * 100}%`; open.title = `Open: ${row.open}`;
+        track.append(resolved, open); wrap.append(head, track); return wrap;
       }));
+      if (!rows.length) el.issueTypeChart.textContent = 'No tickets yet';
+    }
+
+    function renderCategoryChart(tickets) {
+      const values = new Map();
+      tickets.filter((ticket) => ticket.status === 'done').forEach((ticket) => {
+        const name = issueCategory(ticket); values.set(name, (values.get(name) || 0) + 1);
+      });
+      const rows = [...values.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+      const max = Math.max(1, ...rows.map((row) => row[1]));
+      el.categoryChart.replaceChildren(...rows.map(([name, count]) => {
+        const column = document.createElement('div'); column.className = 'flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1';
+        const value = document.createElement('span'); value.className = 'text-[10px] font-bold text-slate-600'; value.textContent = String(count);
+        const bar = document.createElement('div'); bar.className = 'w-full max-w-10 rounded-t-md bg-cyan-600'; bar.style.height = `${Math.max(5, count / max * 72)}%`;
+        const label = document.createElement('span'); label.className = 'w-full truncate text-center text-[9px] text-slate-500'; label.textContent = name;
+        column.append(value, bar, label); return column;
+      }));
+      if (!rows.length) el.categoryChart.textContent = 'No resolved tickets yet';
+    }
+
+    function renderMonthlyChart(tickets) {
+      const months = Array.from({ length: 12 }, (_, index) => {
+        const date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - (11 - index));
+        return { year: date.getFullYear(), month: date.getMonth(), label: new Intl.DateTimeFormat('en', { month: 'short' }).format(date), open: 0, resolved: 0 };
+      });
+      const byMonth = new Map(months.map((item, index) => [`${item.year}-${item.month}`, index]));
+      tickets.forEach((ticket) => { const date = new Date(ticket.created_at); const index = byMonth.get(`${date.getFullYear()}-${date.getMonth()}`); if (index !== undefined) months[index][ticket.status === 'done' ? 'resolved' : 'open']++; });
+      const width = 900, height = 230, left = 36, right = 12, top = 18, bottom = 32;
+      const max = Math.max(1, ...months.map((m) => Math.max(m.open, m.resolved)));
+      const x = (i) => left + i * (width - left - right) / (months.length - 1);
+      const y = (v) => height - bottom - v / max * (height - top - bottom);
+      const poly = (key, color) => `<polyline fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="${months.map((m, i) => `${x(i)},${y(m[key])}`).join(' ')}"/>`;
+      const dots = (key, color) => months.map((m, i) => `<circle cx="${x(i)}" cy="${y(m[key])}" r="4" fill="white" stroke="${color}" stroke-width="2"><title>${m.label}: ${m[key]}</title></circle>`).join('');
+      const grid = [0, .25, .5, .75, 1].map((fraction) => { const yy = y(max * fraction); return `<line x1="${left}" x2="${width - right}" y1="${yy}" y2="${yy}" stroke="#e2e8f0" stroke-dasharray="3 5"/><text x="${left - 8}" y="${yy + 4}" text-anchor="end" fill="#94a3b8" font-size="10">${Math.round(max * fraction)}</text>`; }).join('');
+      const labels = months.map((m, i) => `<text x="${x(i)}" y="${height - 8}" text-anchor="middle" fill="#94a3b8" font-size="10">${m.label}</text>`).join('');
+      el.monthlyChart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" class="w-full" role="img" aria-label="Tickets created by month, grouped by current status">${grid}${poly('resolved', '#f0a51b')}${poly('open', '#12a6b6')}${dots('resolved', '#f0a51b')}${dots('open', '#12a6b6')}${labels}</svg>`;
     }
 
     function renderRecentTickets(tickets) {
@@ -414,7 +425,18 @@
         el.dashToday.textContent = toBnDigits(today);
         el.dashboardCompletionRate.textContent = `${toBnDigits(rate)}%`;
         el.dashboardProgress.style.width = `${rate}%`;
-        renderDashboardChart(tickets);
+        const circumference = 2 * Math.PI * 58;
+        const doneLength = total ? doneTotal / total * circumference : 0;
+        const pendingLength = total ? pendingTotal / total * circumference : 0;
+        el.donutDone.setAttribute('stroke-dasharray', `${doneLength} ${circumference - doneLength}`);
+        el.donutPending.setAttribute('stroke-dasharray', `${pendingLength} ${circumference - pendingLength}`);
+        el.donutPending.setAttribute('stroke-dashoffset', `${-doneLength}`);
+        el.donutDoneLabel.textContent = toBnDigits(doneTotal);
+        el.donutPendingLabel.textContent = toBnDigits(pendingTotal);
+        el.donutTotalLabel.textContent = toBnDigits(total);
+        renderIssueTypeChart(tickets);
+        renderCategoryChart(tickets);
+        renderMonthlyChart(tickets);
         renderRecentTickets(tickets);
         el.dashboardUpdated.textContent = `Updated ${new Intl.DateTimeFormat('bn-BD', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Dhaka' }).format(new Date())}`;
       } catch (error) {

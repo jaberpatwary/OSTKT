@@ -29,11 +29,13 @@
     body { font-family: 'Hind Siliguri', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
     summary::-webkit-details-marker { display: none; }
 
-    /* Keep the requested two-thirds dashboard and one-third ticket panel side by side on desktop/tablet. */
+    /* Keep the ticket workspace wide on the left and analytics compact on the right. */
     @media (min-width: 720px) and (max-width: 1279px) {
       #workspaceLayout { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
-      #dashboardSection { grid-column: 1; }
-      #ticketSection { grid-column: 2; grid-row: 1; max-width: none; margin-inline: 0; position: sticky; top: 1.25rem; }
+      #ticketSection { grid-column: 1; grid-row: 1; max-width: none; margin-inline: 0; position: sticky; top: 1.25rem; }
+      #dashboardSection { grid-column: 2; grid-row: 1; }
+      #dashboardSection > .grid.grid-cols-2 { grid-template-columns: minmax(0, 1fr); }
+      #dashboardSearch { width: 100%; }
     }
 
     /* স্ক্রিন বদলের সময় হালকা এন্ট্রি */
@@ -85,7 +87,7 @@
     <!-- ===================== হোম স্ক্রিন ===================== -->
     <section id="homeScreen" class="screen-enter">
       <div id="workspaceLayout" class="grid grid-cols-1 items-start gap-5 xl:grid-cols-3 2xl:gap-6">
-      <section id="dashboardSection" aria-labelledby="dashboardTitle" class="w-full rounded-[2rem] border border-slate-200 bg-slate-50 p-4 shadow-2xl shadow-slate-300/40 sm:p-5 xl:col-span-2 2xl:p-7">
+      <section id="dashboardSection" aria-labelledby="dashboardTitle" class="order-2 w-full rounded-[2rem] border border-slate-200 bg-slate-50 p-4 shadow-2xl shadow-slate-300/40 sm:p-5 xl:col-span-1 xl:col-start-3 2xl:p-5">
         <header class="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p class="text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">IT SERVICE OPERATIONS</p>
@@ -110,7 +112,7 @@
           </div>
         </div>
 
-        <div class="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-6">
+        <div class="mt-4 grid grid-cols-2 gap-3">
           <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-slate-500">Total tickets</p><p id="dashTotal" class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">—</p><p class="mt-1 text-xs text-slate-400">All recorded requests</p>
           </article>
           <article class="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-amber-700">Open / Pending</p><p id="dashPending" class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">—</p><p class="mt-1 text-xs text-slate-400">Waiting for resolution</p>
@@ -125,17 +127,17 @@
           </article>
         </div>
 
-        <div class="mt-4 grid gap-4 2xl:grid-cols-3">
+        <div class="mt-4 grid gap-4">
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div class="flex items-start justify-between"><div><h3 class="font-bold text-slate-800">Support status</h3><p class="text-xs text-slate-400">Resolved vs open tickets</p></div><span id="dashCompletionRate" class="rounded-full bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700">—</span></div><div class="mt-3 flex items-center justify-center gap-4"><svg id="statusDonut" viewBox="0 0 160 160" class="h-40 w-40 -rotate-90" role="img" aria-label="Ticket status distribution"><circle cx="80" cy="80" r="58" fill="none" stroke="#e2e8f0" stroke-width="22"/><circle id="donutDone" cx="80" cy="80" r="58" fill="none" stroke="#18a66a" stroke-width="22" stroke-dasharray="0 365"/><circle id="donutPending" cx="80" cy="80" r="58" fill="none" stroke="#f4ad28" stroke-width="22" stroke-dasharray="0 365" stroke-dashoffset="-365"/></svg><div class="space-y-3 text-xs"><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Resolved <strong id="donutDoneLabel" class="ml-1 text-slate-800">—</strong></p><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-amber-400"></span>Open <strong id="donutPendingLabel" class="ml-1 text-slate-800">—</strong></p><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-slate-200"></span>Total <strong id="donutTotalLabel" class="ml-1 text-slate-800">—</strong></p></div></div><div class="h-2 overflow-hidden rounded-full bg-slate-100"><div id="dashboardProgress" class="h-full rounded-full bg-emerald-500 transition-all" style="width:0%"></div></div></section>
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div class="flex flex-wrap items-start justify-between gap-2"><div><h3 class="font-bold text-slate-800">Tickets by issue type</h3><p class="text-xs text-slate-400">Open and resolved volume</p></div><div class="flex gap-2 text-[10px]"><span class="text-emerald-600">● Resolved</span><span class="text-cyan-600">● Open</span></div></div><div id="issueTypeChart" class="mt-4 space-y-3" aria-label="Ticket issue type chart"></div></section>
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div><h3 class="font-bold text-slate-800">Resolved by category</h3><p class="text-xs text-slate-400">Top recurring categories</p></div><div id="categoryChart" class="mt-4 flex h-44 items-end justify-around gap-2 border-b border-slate-100 pb-1" aria-label="Resolved ticket categories"></div></section>
-          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-3"><div class="flex flex-wrap items-start justify-between gap-3"><div><h3 class="font-bold text-slate-800">Monthly ticket volume by current status</h3><p class="text-xs text-slate-400">Tickets created in each month · 12 months · all range</p></div><div class="flex gap-4 text-xs"><span class="text-amber-600">● Resolved</span><span class="text-cyan-700">● Open</span></div></div><div id="monthlyChart" class="mt-3 overflow-hidden" aria-label="Monthly ticket trend"></div></section>
-          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-1"><div><h3 class="font-bold text-slate-800">Open workload</h3><p class="text-xs text-slate-400">Pending tickets by assignee</p></div><div id="assigneeWorkload" class="mt-4 space-y-3"></div></section>
-          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-2"><div class="flex flex-wrap items-center justify-between gap-2"><div><h3 class="font-bold text-slate-800">Recent tickets</h3><p id="recentTicketCount" class="text-xs text-slate-400">Latest support requests and assignees</p></div><div class="flex items-center gap-3"><button id="clearTicketFilters" type="button" class="hidden text-xs font-semibold text-rose-600 hover:underline">Clear filters</button><a href="/admin" class="text-xs font-semibold text-blue-700 hover:underline">Open ticket manager →</a></div></div><ul id="dashboardRecent" class="mt-2 divide-y divide-slate-100"></ul><p id="dashboardEmpty" class="hidden py-6 text-center text-sm text-slate-400">এখনো কোনো টিকিট নেই</p></section>
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div class="flex flex-wrap items-start justify-between gap-3"><div><h3 class="font-bold text-slate-800">Monthly ticket volume by current status</h3><p class="text-xs text-slate-400">Tickets created in each month · 12 months · all range</p></div><div class="flex gap-4 text-xs"><span class="text-amber-600">● Resolved</span><span class="text-cyan-700">● Open</span></div></div><div id="monthlyChart" class="mt-3 overflow-hidden" aria-label="Monthly ticket trend"></div></section>
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div><h3 class="font-bold text-slate-800">Open workload</h3><p class="text-xs text-slate-400">Pending tickets by assignee</p></div><div id="assigneeWorkload" class="mt-4 space-y-3"></div></section>
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div class="flex flex-wrap items-center justify-between gap-2"><div><h3 class="font-bold text-slate-800">Recent tickets</h3><p id="recentTicketCount" class="text-xs text-slate-400">Latest support requests and assignees</p></div><div class="flex items-center gap-3"><button id="clearTicketFilters" type="button" class="hidden text-xs font-semibold text-rose-600 hover:underline">Clear filters</button><a href="/admin" class="text-xs font-semibold text-blue-700 hover:underline">Ticket manager →</a></div></div><ul id="dashboardRecent" class="mt-2 divide-y divide-slate-100"></ul><p id="dashboardEmpty" class="hidden py-6 text-center text-sm text-slate-400">এখনো কোনো টিকিট নেই</p></section>
         </div>
         <p id="dashboardError" role="status" class="mt-3 hidden rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
       </section>
-      <section id="ticketSection" class="mx-auto w-full max-w-md rounded-[2rem] border border-slate-200 bg-white/80 p-4 shadow-xl shadow-slate-200/50 xl:sticky xl:top-5 xl:col-span-1 sm:p-6">
+      <section id="ticketSection" class="order-1 mx-auto w-full max-w-3xl rounded-[2rem] border border-slate-200 bg-white/80 p-4 shadow-xl shadow-slate-200/50 sm:p-6 xl:sticky xl:top-5 xl:col-span-2 xl:col-start-1">
       <header class="text-center">
         <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-emerald-500 text-4xl shadow-lg shadow-blue-600/25" aria-hidden="true">🎫</div>
         <h1 class="mt-5 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Auto Ticket System</h1>

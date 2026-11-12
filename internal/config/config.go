@@ -25,6 +25,8 @@ type Config struct {
 	SMTPPassword    string
 	SMTPFrom        string
 	SMTPFromName    string
+	GroqAPIKey      string
+	GroqModel       string
 }
 
 func Load() (Config, error) {
@@ -50,6 +52,8 @@ func Load() (Config, error) {
 		SMTPPassword:    value("SMTP_PASS", ""),
 		SMTPFrom:        value("SMTP_FROM", value("SMTP_USER", "")),
 		SMTPFromName:    value("SMTP_FROM_NAME", "Auto Ticket System"),
+		GroqAPIKey:      value("GROQ_API_KEY", ""),
+		GroqModel:       value("GROQ_MODEL", "openai/gpt-oss-20b"),
 	}, nil
 }
 

@@ -233,14 +233,14 @@
         <header class="flex items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-cyan-50 to-blue-50 px-4 py-4">
           <div class="flex min-w-0 items-center gap-3">
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-600 to-blue-600 text-xl text-white shadow-md" aria-hidden="true">✦</span>
-            <div class="min-w-0"><h2 id="ticketAssistantTitle" class="truncate font-bold text-slate-900">Ticket Assistant</h2><p class="text-xs text-slate-500">কথা বলেই ticket draft তৈরি করুন</p></div>
+          <div class="min-w-0"><h2 id="ticketAssistantTitle" class="truncate font-bold text-slate-900">Ticket Assistant</h2><p class="text-xs text-slate-500">কথা বলেই ticket তৈরি করুন</p></div>
           </div>
-          <span class="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700">Groq API পরে যুক্ত হবে</span>
+          <span id="assistantConnectionBadge" class="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700">Groq API key দরকার</span>
         </header>
 
-        <div id="assistantMessages" class="max-h-80 space-y-3 overflow-y-auto bg-slate-50/70 p-4" aria-live="polite" aria-label="Ticket assistant conversation">
+          <div id="assistantMessages" class="max-h-80 space-y-3 overflow-y-auto bg-slate-50/70 p-4" aria-live="polite" aria-label="Ticket assistant conversation">
           <div class="flex justify-start"><p class="max-w-[92%] rounded-2xl rounded-tl-md border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed text-slate-700 shadow-sm">হ্যালো! কর্মীর নাম ও সমস্যাটা লিখুন। যেমন: “Sumaiya-এর PC চালু হচ্ছে না, assign Rupok-কে।” API যুক্ত হলে আমি ticket তৈরি করে দেব।</p></div>
-          <div class="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">এটি এখন UI preview। Groq API সংযোগ না হওয়া পর্যন্ত chat থেকে কোনো message process বা ticket submit হবে না।</div>
+          <div id="assistantPreviewNotice" class="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">GROQ_API_KEY server-এ সেট হলে chat থেকে Pending ticket তৈরি হবে।</div>
         </div>
 
         <div class="border-t border-slate-100 bg-white p-4">
@@ -318,6 +318,8 @@
       actionButtons: $('actionButtons'), doneBtn: $('doneBtn'), pendingBtn: $('pendingBtn'), doneSub: $('doneSub'),
       pendingPanel: $('pendingPanel'), pendingCount: $('pendingCount'), pendingList: $('pendingList'),
       assistantInput: $('assistantInput'), assistantStatus: $('assistantStatus'),
+      assistantMessages: $('assistantMessages'), assistantSend: $('assistantSend'), assistantPreviewNotice: $('assistantPreviewNotice'),
+      assistantConnectionBadge: $('assistantConnectionBadge'),
       dashTotal: $('dashTotal'), dashPending: $('dashPending'), dashDone: $('dashDone'), dashToday: $('dashToday'),
       dashboardRecent: $('dashboardRecent'), dashboardEmpty: $('dashboardEmpty'),
       dashboardCompletionRate: $('dashCompletionRate'), dashboardProgress: $('dashboardProgress'),
@@ -352,6 +354,9 @@
     let debounceTimer = null;
     let dashboardTickets = [];
     let activeIssueFilter = '';
+    const assistantConversation = [];
+    let assistantEnabled = false;
+    let assistantSelectedEmployeeID = '';
 
     // ---------- ছোট হেল্পার ----------
     const show = (node) => node.classList.remove('hidden');
@@ -374,6 +379,112 @@
       let data = {};
       try { data = await res.json(); } catch (_) { /* JSON নয় */ }
       return { ok: res.ok, status: res.status, data };
+    }
+
+    function appendAssistantMessage(role, content) {
+      const row = document.createElement('div');
+      row.className = `flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+      const bubble = document.createElement('p');
+      bubble.className = role === 'user'
+        ? 'max-w-[92%] whitespace-pre-wrap rounded-2xl rounded-tr-md bg-blue-600 px-3 py-2.5 text-sm leading-relaxed text-white shadow-sm'
+        : 'max-w-[92%] whitespace-pre-wrap rounded-2xl rounded-tl-md border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed text-slate-700 shadow-sm';
+      bubble.textContent = content;
+      row.append(bubble);
+      el.assistantMessages.append(row);
+      el.assistantMessages.scrollTop = el.assistantMessages.scrollHeight;
+    }
+
+    function appendAssistantTicket(ticket) {
+      const card = document.createElement('article');
+      card.className = 'ml-auto max-w-[95%] rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs';
+      const title = document.createElement('p'); title.className = 'font-bold text-emerald-800'; title.textContent = `Ticket ${ticket.ticket_number} · Pending`;
+      const name = document.createElement('p'); name.className = 'mt-1 text-slate-700'; name.textContent = `কর্মী: ${ticket.employee?.Name || '—'} (${ticket.employee?.EmployeeID || '—'})`;
+      const problem = document.createElement('p'); problem.className = 'mt-1 text-slate-600'; problem.textContent = `সমস্যা: ${ticket.problem || '—'}`;
+      const assignee = document.createElement('p'); assignee.className = 'mt-1 text-slate-600'; assignee.textContent = `Assignee: ${ticket.assigned_to || 'দেওয়া হয়নি'}`;
+      const open = document.createElement('button'); open.type = 'button'; open.className = 'mt-2 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 font-semibold text-emerald-800 hover:bg-emerald-100'; open.textContent = 'Full ticket দেখুন';
+      open.addEventListener('click', () => showResult(ticket));
+      card.append(title, name, problem, assignee, open);
+      el.assistantMessages.append(card);
+      el.assistantMessages.scrollTop = el.assistantMessages.scrollHeight;
+    }
+
+    function appendAssistantCandidates(matches) {
+      if (!Array.isArray(matches) || !matches.length) return;
+      const group = document.createElement('div'); group.className = 'flex flex-wrap gap-2';
+      matches.forEach((match) => {
+        const button = document.createElement('button'); button.type = 'button';
+        button.className = 'rounded-xl border border-cyan-200 bg-white px-3 py-2 text-left text-xs shadow-sm hover:bg-cyan-50';
+        button.textContent = `${match.name} · ${match.employee_id}${match.department ? ` · ${match.department}` : ''}`;
+        button.addEventListener('click', () => {
+          assistantSelectedEmployeeID = match.employee_id;
+          sendAssistantMessage(`আমি ${match.name} (ID ${match.employee_id})-কে বেছে নিচ্ছি।`);
+        });
+        group.append(button);
+      });
+      el.assistantMessages.append(group);
+      el.assistantMessages.scrollTop = el.assistantMessages.scrollHeight;
+    }
+
+    async function loadAssistantStatus() {
+      try {
+        const { ok, data } = await api('/api/assistant/status');
+        assistantEnabled = ok && data.enabled === true;
+      } catch (_) {
+        assistantEnabled = false;
+      }
+      el.assistantSend.disabled = !assistantEnabled;
+      el.assistantSend.className = assistantEnabled
+        ? 'flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-cyan-700 px-3 text-xs font-bold text-white hover:bg-cyan-800 disabled:cursor-wait disabled:opacity-60'
+        : 'flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-slate-300 px-3 text-xs font-bold text-white';
+      el.assistantStatus.textContent = assistantEnabled
+        ? 'Groq AI চালু আছে · শুধু Pending ticket তৈরি হবে'
+        : 'GROQ_API_KEY server environment-এ সেট হলে chat চালু হবে';
+      el.assistantConnectionBadge.textContent = assistantEnabled ? 'Groq connected' : 'Groq API key দরকার';
+      el.assistantConnectionBadge.className = assistantEnabled
+        ? 'shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700'
+        : 'shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700';
+      el.assistantPreviewNotice.classList.toggle('hidden', assistantEnabled);
+    }
+
+    async function sendAssistantMessage(messageText) {
+      if (!assistantEnabled || el.assistantSend.disabled) return;
+      const content = String(messageText || el.assistantInput.value).trim();
+      if (!content || content.length > 1200) return;
+      assistantConversation.push({ role: 'user', content });
+      if (assistantConversation.length > 12) assistantConversation.splice(0, assistantConversation.length - 12);
+      appendAssistantMessage('user', content);
+      el.assistantInput.value = '';
+      const selectedEmployeeID = assistantSelectedEmployeeID;
+      assistantSelectedEmployeeID = '';
+      el.assistantSend.disabled = true;
+      el.assistantSend.textContent = '⏳';
+      el.assistantStatus.textContent = 'কর্মী ও সমস্যার তথ্য দেখা হচ্ছে…';
+      try {
+        const { ok, status, data } = await api('/api/assistant', {
+          method: 'POST',
+          body: JSON.stringify({ messages: assistantConversation, selected_employee_id: selectedEmployeeID }),
+        });
+        if (!ok) throw new Error(data.error || `Chat request failed (${status})`);
+        const reply = data.reply || 'আর কোনো তথ্য লাগলে লিখুন।';
+        appendAssistantMessage('assistant', reply);
+        if (data.created && data.ticket) {
+          appendAssistantTicket(data.ticket);
+          assistantConversation.length = 0;
+          loadPending();
+          loadDashboard();
+          el.assistantStatus.textContent = 'Ticket তৈরি সম্পন্ন · নতুন ticket-এর জন্য লিখতে থাকুন';
+        } else {
+          assistantConversation.push({ role: 'assistant', content: reply });
+          appendAssistantCandidates(data.matches);
+          el.assistantStatus.textContent = 'কর্মীর নাম ও সমস্যাটি নিশ্চিত করে লিখুন';
+        }
+      } catch (error) {
+        appendAssistantMessage('assistant', error.message || 'Chat service-এ সংযোগ করা যায়নি।');
+        el.assistantStatus.textContent = 'আবার চেষ্টা করুন বা API configuration যাচাই করুন';
+      } finally {
+        el.assistantSend.textContent = 'Send ➤';
+        el.assistantSend.disabled = !assistantEnabled;
+      }
     }
 
     function dhakaDateKey(date) {
@@ -1010,6 +1121,13 @@
         el.assistantStatus.textContent = 'Example বসানো হয়েছে। Groq API যুক্ত হলে এটি পাঠাতে পারবেন।';
       });
     });
+    el.assistantSend.addEventListener('click', () => sendAssistantMessage());
+    el.assistantInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendAssistantMessage();
+      }
+    });
     el.convertDoneBtn.addEventListener('click', () => {
       if (state.ticket) convertToDone(state.ticket.id, el.convertDoneBtn);
     });
@@ -1019,6 +1137,7 @@
     // শুরুতে
     loadPending();
     loadDashboard();
+    loadAssistantStatus();
     if (window.matchMedia('(pointer: fine)').matches) el.nameInput.focus();
   })();
   </script>

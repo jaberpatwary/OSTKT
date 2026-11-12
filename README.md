@@ -112,6 +112,21 @@ SMTP_FROM_NAME=Auto Ticket System
 
 ---
 
+## Groq AI Ticket Assistant
+
+Ticket form-এর নিচের chat assistant কর্মীর নাম, সমস্যার বিবরণ এবং optional assignee বুঝে ticket তৈরি করে। Ticket সবসময় `pending` status-এ তৈরি হয়। নাম পুরোপুরি না মিললে assistant employee options দেখায়; একই নাম থাকলে ticket তৈরির আগে সঠিক employee বেছে নিতে হয়। Groq API key browser-এ যায় না; server থেকে API call করা হয়।
+
+Groq console থেকে API key তৈরি করে local `.env` বা deployment secret-এ রাখুন:
+
+```env
+GROQ_API_KEY=your_rotated_groq_api_key
+GROQ_MODEL=openai/gpt-oss-20b
+```
+
+পরিবর্তনের পর app restart করুন। API key কখনো GitHub-এ commit করবেন না। Key না থাকলে chat UI বন্ধ থাকবে; সাধারণ ticket form কাজ করবে।
+
+---
+
 ## 🐘 Neon PostgreSQL সেটআপ (ফ্রি)
 
 1. https://neon.tech এ ফ্রি অ্যাকাউন্ট খুলে নতুন **Project** বানান (Region: Singapore — বাংলাদেশ থেকে সবচেয়ে কাছে)।
@@ -238,6 +253,8 @@ curl "http://localhost:8080/api/tickets?status=pending"
 | `SMTP_HOST` / `SMTP_PORT` | — / `587` | Brevo: `smtp-relay.brevo.com`, Render-এ `2525` |
 | `SMTP_USER` / `SMTP_PASS` | — | Brevo login ও SMTP key |
 | `SMTP_FROM` / `SMTP_FROM_NAME` | `SMTP_USER` / `Auto Ticket System` | প্রেরক |
+| `GROQ_API_KEY` | — | Chat assistant-এর server-side Groq key |
+| `GROQ_MODEL` | `openai/gpt-oss-20b` | Ticket তথ্য extraction model |
 | `APP_USER` / `APP_PASS` | — | দুটোই দিলে পুরো সাইটে লগইন |
 | `APP_TIMEZONE` | `Asia/Dhaka` | টিকিট নম্বরের তারিখ ও ইমেইলের সময় |
 | `GIN_MODE` | `debug` | প্রোডাকশনে `release` |

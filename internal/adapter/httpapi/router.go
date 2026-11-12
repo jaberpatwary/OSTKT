@@ -2,14 +2,17 @@ package httpapi
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	groqapi "ticket-system/internal/adapter/groq"
 	"ticket-system/internal/config"
 	"ticket-system/internal/domain"
 	"ticket-system/internal/usecase"
@@ -46,7 +49,15 @@ func toView(ticket domain.Ticket, emailQueued bool) ticketView {
 }
 
 type Handler struct {
-	tickets TicketUseCase
+	tickets        TicketUseCase
+	assistant      *groqapi.Client
+	assistantMu    sync.Mutex
+	assistantRates map[string]assistantRateEntry
+}
+
+type assistantRateEntry struct {
+	window time.Time
+	count  int
 }
 
 func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, cfg config.Config) *gin.Engine {
@@ -65,7 +76,7 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 		c.JSON(http.StatusOK, gin.H{"ok": true, "database": "connected"})
 	})
 
-	handler := &Handler{tickets: tickets}
+	handler := &Handler{tickets: tickets, assistant: groqapi.NewClient(cfg.GroqAPIKey, cfg.GroqModel), assistantRates: make(map[string]assistantRateEntry)}
 	site := router.Group("/")
 	if cfg.AppUser != "" && cfg.AppPassword != "" {
 		site.Use(gin.BasicAuth(gin.Accounts{cfg.AppUser: cfg.AppPassword}))
@@ -77,6 +88,8 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 
 	api := site.Group("/api")
 	api.GET("/search", handler.searchEmployees)
+	api.GET("/assistant/status", handler.assistantStatus)
+	api.POST("/assistant", handler.assistantChat)
 	api.GET("/tickets", handler.listTickets)
 	api.POST("/tickets", handler.createTicket)
 	api.GET("/tickets/:id", handler.getTicket)
@@ -87,6 +100,169 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 		c.JSON(http.StatusNotFound, gin.H{"error": "page not found"})
 	})
 	return router
+}
+
+func (h *Handler) assistantStatus(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"enabled": h.assistant.Enabled()})
+}
+
+type assistantChatRequest struct {
+	Messages           []groqapi.Message `json:"messages"`
+	SelectedEmployeeID string            `json:"selected_employee_id"`
+}
+
+func normalizeAssistantValue(value string) string {
+	return strings.ToLower(strings.Join(strings.Fields(value), " "))
+}
+
+func (h *Handler) assistantChat(c *gin.Context) {
+	if !h.assistant.Enabled() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Groq API is not configured yet"})
+		return
+	}
+	if !h.allowAssistantRequest(c.ClientIP(), time.Now()) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "অনেকগুলো request হয়েছে। এক মিনিট পরে আবার চেষ্টা করুন।"})
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 20<<10)
+	var request assistantChatRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid assistant request"})
+		return
+	}
+	if len(request.Messages) == 0 || len(request.Messages) > 12 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "send between 1 and 12 messages"})
+		return
+	}
+	contentLength := 0
+	for i, message := range request.Messages {
+		message.Role = strings.ToLower(strings.TrimSpace(message.Role))
+		if message.Role != "user" && message.Role != "assistant" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid conversation role"})
+			return
+		}
+		message.Content = strings.TrimSpace(message.Content)
+		if message.Content == "" || len([]rune(message.Content)) > 1200 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "each message must contain 1 to 1200 characters"})
+			return
+		}
+		contentLength += len(message.Content)
+		request.Messages[i] = message
+	}
+	if contentLength > 6000 || request.Messages[len(request.Messages)-1].Role != "user" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "conversation is too long or does not end with a user message"})
+		return
+	}
+	details, err := h.assistant.ExtractTicket(c.Request.Context(), request.Messages)
+	if err != nil {
+		log.Printf("assistant extraction failed: %v", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "AI service could not process the request. Check Groq API settings and try again."})
+		return
+	}
+	details.EmployeeName = strings.TrimSpace(details.EmployeeName)
+	details.Problem = strings.TrimSpace(details.Problem)
+	details.Assignee = strings.TrimSpace(details.Assignee)
+	details.Reply = strings.TrimSpace(details.Reply)
+	if len([]rune(details.Problem)) > 2000 {
+		c.JSON(http.StatusOK, gin.H{"reply": "সমস্যার বিবরণ ২০০০ অক্ষরের মধ্যে ছোট করে লিখুন।"})
+		return
+	}
+	if len([]rune(details.Assignee)) > 100 {
+		c.JSON(http.StatusOK, gin.H{"reply": "Assignee-এর নাম ১০০ অক্ষরের মধ্যে লিখুন।"})
+		return
+	}
+	if details.Problem == "" {
+		reply := details.Reply
+		if reply == "" {
+			reply = "কী সমস্যা হচ্ছে, একটু বিস্তারিত লিখবেন?"
+		}
+		c.JSON(http.StatusOK, gin.H{"reply": reply})
+		return
+	}
+
+	var employee domain.Employee
+	if employeeID := strings.TrimSpace(request.SelectedEmployeeID); employeeID != "" {
+		matches := h.tickets.SearchEmployees(employeeID, usecase.MaxSearchResults)
+		for _, match := range matches {
+			if strings.EqualFold(strings.TrimSpace(match.EmployeeID), employeeID) {
+				employee = match
+				break
+			}
+		}
+		if employee.EmployeeID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "selected employee is invalid; choose again"})
+			return
+		}
+	} else {
+		if details.EmployeeName == "" {
+			reply := details.Reply
+			if reply == "" {
+				reply = "কোন কর্মীর জন্য ticket করবেন? পূর্ণ নামটি লিখুন।"
+			}
+			c.JSON(http.StatusOK, gin.H{"reply": reply})
+			return
+		}
+		matches := h.tickets.SearchEmployees(details.EmployeeName, usecase.MaxSearchResults)
+		exact := make([]domain.Employee, 0, len(matches))
+		for _, match := range matches {
+			if normalizeAssistantValue(match.Name) == normalizeAssistantValue(details.EmployeeName) {
+				exact = append(exact, match)
+			}
+		}
+		if len(exact) != 1 {
+			if len(matches) == 0 {
+				c.JSON(http.StatusOK, gin.H{"reply": fmt.Sprintf("“%s” নামে কর্মী খুঁজে পাইনি। পূর্ণ নাম বা employee ID লিখুন।", details.EmployeeName)})
+				return
+			}
+			options := make([]gin.H, 0, len(matches))
+			for _, match := range matches {
+				options = append(options, gin.H{"name": match.Name, "employee_id": match.EmployeeID, "department": match.Department})
+			}
+			c.JSON(http.StatusOK, gin.H{"reply": "সঠিক কর্মীটি বেছে নিন, তারপর ticket তৈরি হবে।", "matches": options})
+			return
+		}
+		employee = exact[0]
+	}
+	if details.Problem == "" {
+		c.JSON(http.StatusOK, gin.H{"reply": "কী সমস্যা হচ্ছে, একটু বিস্তারিত লিখবেন?"})
+		return
+	}
+	ticket, emailQueued, err := h.tickets.Create(c.Request.Context(), usecase.CreateTicketInput{
+		Name: employee.Name, EmployeeID: employee.EmployeeID, Status: domain.StatusPending,
+		Problem: details.Problem, AssignedTo: details.Assignee,
+	})
+	if err != nil {
+		h.writeCreateError(c, err)
+		return
+	}
+	reply := fmt.Sprintf("Pending ticket %s তৈরি হয়েছে।", ticket.TicketNumber)
+	if ticket.AssignedTo != "" {
+		reply += " Assignee: " + ticket.AssignedTo + "."
+	}
+	c.JSON(http.StatusCreated, gin.H{"reply": reply, "ticket": toView(ticket, emailQueued), "created": true})
+}
+
+func (h *Handler) allowAssistantRequest(clientIP string, now time.Time) bool {
+	h.assistantMu.Lock()
+	defer h.assistantMu.Unlock()
+	if h.assistantRates == nil {
+		h.assistantRates = make(map[string]assistantRateEntry)
+	}
+	for ip, entry := range h.assistantRates {
+		if now.Sub(entry.window) > 2*time.Minute {
+			delete(h.assistantRates, ip)
+		}
+	}
+	entry := h.assistantRates[clientIP]
+	if now.Sub(entry.window) >= time.Minute || entry.window.IsZero() {
+		entry = assistantRateEntry{window: now}
+	}
+	if entry.count >= 15 {
+		return false
+	}
+	entry.count++
+	h.assistantRates[clientIP] = entry
+	return true
 }
 
 func (h *Handler) searchEmployees(c *gin.Context) {

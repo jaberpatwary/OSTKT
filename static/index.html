@@ -73,10 +73,80 @@
     </div>
   </div>
 
-  <main class="mx-auto w-full max-w-md px-4 pb-14 pt-10 sm:pt-16">
+  <main class="mx-auto w-full max-w-6xl px-4 pb-14 pt-6 sm:px-6 sm:pt-10">
 
     <!-- ===================== হোম স্ক্রিন ===================== -->
     <section id="homeScreen" class="screen-enter">
+      <section aria-labelledby="dashboardTitle" class="mx-auto mb-8 max-w-6xl rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-xl shadow-slate-200/50 sm:p-6">
+        <header class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">WORKSPACE OVERVIEW</p>
+            <h2 id="dashboardTitle" class="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">Ticket Dashboard</h2>
+            <p class="mt-1 text-sm text-slate-500">Ticket activity ও status এক নজরে</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <span id="dashboardUpdated" class="mr-1 text-xs text-slate-400">লোড হচ্ছে…</span>
+            <button id="dashboardRefresh" type="button" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">↻ Refresh</button>
+            <a href="/admin" class="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700">Admin Panel</a>
+          </div>
+        </header>
+
+        <div class="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <article class="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4">
+            <p class="text-sm font-medium text-blue-700">মোট টিকিট</p>
+            <p id="dashTotal" class="mt-2 text-3xl font-bold tracking-tight text-slate-900">—</p>
+            <p class="mt-1 text-xs text-slate-500">সব status মিলিয়ে</p>
+          </article>
+          <article class="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-4">
+            <p class="text-sm font-medium text-amber-800">Pending</p>
+            <p id="dashPending" class="mt-2 text-3xl font-bold tracking-tight text-slate-900">—</p>
+            <p class="mt-1 text-xs text-slate-500">কাজ বাকি আছে</p>
+          </article>
+          <article class="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-4">
+            <p class="text-sm font-medium text-emerald-800">Done</p>
+            <p id="dashDone" class="mt-2 text-3xl font-bold tracking-tight text-slate-900">—</p>
+            <p class="mt-1 text-xs text-slate-500">সম্পন্ন হয়েছে</p>
+          </article>
+          <article class="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-4">
+            <p class="text-sm font-medium text-violet-800">আজকের টিকিট</p>
+            <p id="dashToday" class="mt-2 text-3xl font-bold tracking-tight text-slate-900">—</p>
+            <p class="mt-1 text-xs text-slate-500">আজ তৈরি হয়েছে</p>
+          </article>
+        </div>
+
+        <div class="mt-4 grid gap-4 lg:grid-cols-5">
+          <section class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 lg:col-span-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h3 class="font-bold text-slate-800">গত ৭ দিনের activity</h3>
+                <p class="text-xs text-slate-500">প্রতিদিন তৈরি হওয়া ticket</p>
+              </div>
+              <div class="min-w-28 text-right">
+                <p class="text-xs text-slate-500">Completion rate</p>
+                <p id="dashCompletionRate" class="font-bold text-emerald-700">—</p>
+              </div>
+            </div>
+            <div id="dashboardChart" class="mt-4 grid h-32 grid-cols-7 items-end gap-2" aria-label="গত ৭ দিনের টিকিট চার্ট"></div>
+            <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
+              <div id="dashboardProgress" class="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all" style="width:0%"></div>
+            </div>
+          </section>
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 lg:col-span-2">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <h3 class="font-bold text-slate-800">সাম্প্রতিক টিকিট</h3>
+                <p class="text-xs text-slate-500">সর্বশেষ ৫টি</p>
+              </div>
+              <a href="/admin" class="text-xs font-semibold text-blue-700 hover:underline">সব দেখুন →</a>
+            </div>
+            <ul id="dashboardRecent" class="mt-2 divide-y divide-slate-100"></ul>
+            <p id="dashboardEmpty" class="hidden py-6 text-center text-sm text-slate-400">এখনো কোনো টিকিট নেই</p>
+          </section>
+        </div>
+        <p id="dashboardError" role="status" class="mt-3 hidden rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
+      </section>
+
+      <div class="mx-auto max-w-md">
       <header class="text-center">
         <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-emerald-500 text-4xl shadow-lg shadow-blue-600/25" aria-hidden="true">🎫</div>
         <h1 class="mt-5 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Auto Ticket System</h1>
@@ -158,10 +228,11 @@
         </summary>
         <ul id="pendingList" class="divide-y divide-slate-100 border-t border-amber-100"></ul>
       </details>
+      </div>
     </section>
 
     <!-- ===================== রেজাল্ট স্ক্রিন ===================== -->
-    <section id="resultScreen" class="hidden">
+    <section id="resultScreen" class="mx-auto w-full max-w-md hidden">
       <article id="ticketCard" class="overflow-hidden rounded-2xl bg-white shadow-lg">
         <div id="resultHeader" class="bg-gradient-to-br from-emerald-500 to-emerald-600 px-6 py-8 text-center text-white">
           <div id="resultIcon" class="stamp mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/25 text-4xl" aria-hidden="true">✅</div>
@@ -215,6 +286,10 @@
       ticketDetails: $('ticketDetails'), problemInput: $('problemInput'), assignedToInput: $('assignedToInput'),
       actionButtons: $('actionButtons'), doneBtn: $('doneBtn'), pendingBtn: $('pendingBtn'), doneSub: $('doneSub'),
       pendingPanel: $('pendingPanel'), pendingCount: $('pendingCount'), pendingList: $('pendingList'),
+      dashTotal: $('dashTotal'), dashPending: $('dashPending'), dashDone: $('dashDone'), dashToday: $('dashToday'),
+      dashboardChart: $('dashboardChart'), dashboardRecent: $('dashboardRecent'), dashboardEmpty: $('dashboardEmpty'),
+      dashboardCompletionRate: $('dashCompletionRate'), dashboardProgress: $('dashboardProgress'),
+      dashboardUpdated: $('dashboardUpdated'), dashboardRefresh: $('dashboardRefresh'), dashboardError: $('dashboardError'),
       resultHeader: $('resultHeader'), resultIcon: $('resultIcon'), resultTitle: $('resultTitle'), resultSubtitle: $('resultSubtitle'),
       ticketNumber: $('ticketNumber'), rName: $('rName'), rEmpId: $('rEmpId'), rDept: $('rDept'), rProblem: $('rProblem'), rAssignee: $('rAssignee'), rEmail: $('rEmail'),
       rStatus: $('rStatus'), rCreated: $('rCreated'), pendingNote: $('pendingNote'),
@@ -257,6 +332,97 @@
       let data = {};
       try { data = await res.json(); } catch (_) { /* JSON নয় */ }
       return { ok: res.ok, status: res.status, data };
+    }
+
+    function dhakaDateKey(date) {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+    }
+
+    function renderDashboardChart(tickets) {
+      const days = Array.from({ length: 7 }, (_, i) => {
+        const date = new Date();
+        date.setDate(date.getDate() - (6 - i));
+        return { date, key: dhakaDateKey(date), count: 0 };
+      });
+      const counts = new Map(days.map((day) => [day.key, day]));
+      tickets.forEach((ticket) => {
+        const day = counts.get(dhakaDateKey(new Date(ticket.created_at)));
+        if (day) day.count++;
+      });
+      const peak = Math.max(1, ...days.map((day) => day.count));
+      el.dashboardChart.replaceChildren(...days.map((day) => {
+        const column = document.createElement('div');
+        column.className = 'flex h-full min-w-0 flex-col items-center justify-end gap-1';
+        const count = document.createElement('span');
+        count.className = 'text-[10px] font-semibold text-slate-500';
+        count.textContent = String(day.count);
+        const bar = document.createElement('div');
+        bar.className = 'w-full max-w-8 rounded-t-md bg-gradient-to-t from-blue-600 to-cyan-400 transition-all';
+        bar.style.height = `${Math.max(day.count ? 10 : 3, day.count / peak * 74)}%`;
+        bar.title = `${day.key}: ${day.count}`;
+        const label = document.createElement('span');
+        label.className = 'text-[10px] text-slate-400';
+        label.textContent = new Intl.DateTimeFormat('bn-BD', { weekday: 'short', timeZone: 'Asia/Dhaka' }).format(day.date);
+        column.append(count, bar, label);
+        return column;
+      }));
+    }
+
+    function renderRecentTickets(tickets) {
+      const recent = [...tickets].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5);
+      el.dashboardEmpty.classList.toggle('hidden', recent.length > 0);
+      el.dashboardRecent.replaceChildren(...recent.map((ticket) => {
+        const item = document.createElement('li');
+        item.className = 'flex items-start justify-between gap-3 py-3';
+        const details = document.createElement('div');
+        details.className = 'min-w-0';
+        const person = document.createElement('p');
+        person.className = 'truncate text-sm font-semibold text-slate-800';
+        person.textContent = ticket.employee?.Name || 'Unknown employee';
+        const summary = document.createElement('p');
+        summary.className = 'truncate text-xs text-slate-500';
+        summary.textContent = `${ticket.ticket_number || ''} · ${ticket.problem || 'No description'}${ticket.assigned_to ? ` · ${ticket.assigned_to}` : ''}`;
+        details.append(person, summary);
+        const status = document.createElement('span');
+        status.className = `shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${ticket.status === 'done' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`;
+        status.textContent = ticket.status === 'done' ? 'Done' : 'Pending';
+        item.append(details, status);
+        return item;
+      }));
+    }
+
+    async function loadDashboard() {
+      el.dashboardRefresh.disabled = true;
+      el.dashboardError.classList.add('hidden');
+      try {
+        const [all, pending, done] = await Promise.all([
+          api('/api/tickets?limit=500'),
+          api('/api/tickets?status=pending&limit=1'),
+          api('/api/tickets?status=done&limit=1'),
+        ]);
+        if (!all.ok || !pending.ok || !done.ok) throw new Error('Dashboard data could not be loaded.');
+        const tickets = Array.isArray(all.data.tickets) ? all.data.tickets : [];
+        const pendingTotal = Number(pending.data.total || 0);
+        const doneTotal = Number(done.data.total || 0);
+        const total = Number(all.data.total ?? (pendingTotal + doneTotal));
+        const todayKey = dhakaDateKey(new Date());
+        const today = tickets.filter((ticket) => dhakaDateKey(new Date(ticket.created_at)) === todayKey).length;
+        const rate = total ? Math.round(doneTotal / total * 100) : 0;
+        el.dashTotal.textContent = toBnDigits(total);
+        el.dashPending.textContent = toBnDigits(pendingTotal);
+        el.dashDone.textContent = toBnDigits(doneTotal);
+        el.dashToday.textContent = toBnDigits(today);
+        el.dashboardCompletionRate.textContent = `${toBnDigits(rate)}%`;
+        el.dashboardProgress.style.width = `${rate}%`;
+        renderDashboardChart(tickets);
+        renderRecentTickets(tickets);
+        el.dashboardUpdated.textContent = `Updated ${new Intl.DateTimeFormat('bn-BD', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Dhaka' }).format(new Date())}`;
+      } catch (error) {
+        el.dashboardError.textContent = error.message || 'Dashboard data could not be loaded.';
+        el.dashboardError.classList.remove('hidden');
+      } finally {
+        el.dashboardRefresh.disabled = false;
+      }
     }
 
     // ---------- টোস্ট ----------
@@ -478,7 +644,7 @@
             assigned_to: el.assignedToInput.value.trim(),
           }),
         });
-        if (code === 201) { showResult(data); loadPending(); return; }
+        if (code === 201) { showResult(data); loadPending(); loadDashboard(); return; }
 
         if (code === 409 && Array.isArray(data.matches)) {
           // একই নামে একাধিক — তালিকা দেখিয়ে বাছতে দাও
@@ -591,6 +757,7 @@
           showResult(data.ticket);
           if (data.already_done) showToast(data.message, 'info');
           loadPending();
+          loadDashboard();
           return;
         }
         showToast(data.error || `Done করা যায়নি (কোড ${status})`);
@@ -664,6 +831,7 @@
     // ---------- ইভেন্ট ----------
     el.doneBtn.addEventListener('click', () => submitTicket('done'));
     el.pendingBtn.addEventListener('click', () => submitTicket('pending'));
+    el.dashboardRefresh.addEventListener('click', loadDashboard);
     el.convertDoneBtn.addEventListener('click', () => {
       if (state.ticket) convertToDone(state.ticket.id, el.convertDoneBtn);
     });
@@ -672,6 +840,7 @@
 
     // শুরুতে
     loadPending();
+    loadDashboard();
     if (window.matchMedia('(pointer: fine)').matches) el.nameInput.focus();
   })();
   </script>

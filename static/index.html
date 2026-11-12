@@ -29,6 +29,13 @@
     body { font-family: 'Hind Siliguri', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
     summary::-webkit-details-marker { display: none; }
 
+    /* Keep the requested two-thirds dashboard and one-third ticket panel side by side on desktop/tablet. */
+    @media (min-width: 720px) and (max-width: 1279px) {
+      #workspaceLayout { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+      #dashboardSection { grid-column: 1; }
+      #ticketSection { grid-column: 2; grid-row: 1; max-width: none; margin-inline: 0; position: sticky; top: 1.25rem; }
+    }
+
     /* স্ক্রিন বদলের সময় হালকা এন্ট্রি */
     .screen-enter { animation: screenIn .3s ease-out both; }
     @keyframes screenIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
@@ -77,7 +84,7 @@
 
     <!-- ===================== হোম স্ক্রিন ===================== -->
     <section id="homeScreen" class="screen-enter">
-      <div class="grid grid-cols-1 items-start gap-5 xl:grid-cols-3 2xl:gap-6">
+      <div id="workspaceLayout" class="grid grid-cols-1 items-start gap-5 xl:grid-cols-3 2xl:gap-6">
       <section id="dashboardSection" aria-labelledby="dashboardTitle" class="w-full rounded-[2rem] border border-slate-200 bg-slate-50 p-4 shadow-2xl shadow-slate-300/40 sm:p-5 xl:col-span-2 2xl:p-7">
         <header class="flex flex-wrap items-center justify-between gap-4">
           <div>

@@ -485,10 +485,11 @@
         const list = document.createElement('ul'); list.className = 'divide-y divide-slate-100 border-t border-slate-100';
         tickets.forEach((ticket) => {
           const item = document.createElement('li'); item.className = 'flex items-center justify-between gap-2 px-3 py-2';
-          const info = document.createElement('div'); info.className = 'min-w-0';
+          const info = document.createElement('button'); info.type = 'button'; info.className = 'min-w-0 flex-1 rounded-lg text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500'; info.setAttribute('aria-label', `Open full ticket ${ticket.ticket_number || ''}`);
           const person = document.createElement('p'); person.className = 'truncate text-xs font-semibold text-slate-700'; person.textContent = ticket.employee?.Name || ticket.ticket_number;
           const issue = document.createElement('p'); issue.className = 'truncate text-[10px] text-slate-400'; issue.textContent = `${ticket.ticket_number} · ${formatDate(ticket.created_at)} · ${ticket.problem || 'No description'}`;
           info.append(person, issue);
+          info.addEventListener('click', () => showResult(ticket));
           const done = document.createElement('button'); done.type = 'button'; done.className = 'shrink-0 rounded-lg bg-emerald-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50'; done.textContent = 'Done';
           done.addEventListener('click', () => convertToDone(ticket.id, done, false));
           item.append(info, done); list.append(item);

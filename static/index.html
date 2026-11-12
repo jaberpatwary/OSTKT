@@ -131,7 +131,7 @@
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div class="flex flex-wrap items-start justify-between gap-2"><div><h3 class="font-bold text-slate-800">Tickets by issue type</h3><p class="text-xs text-slate-400">Open and resolved volume</p></div><div class="flex gap-2 text-[10px]"><span class="text-emerald-600">● Resolved</span><span class="text-cyan-600">● Open</span></div></div><div id="issueTypeChart" class="mt-4 space-y-3" aria-label="Ticket issue type chart"></div></section>
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div><h3 class="font-bold text-slate-800">Resolved by category</h3><p class="text-xs text-slate-400">Top recurring categories</p></div><div id="categoryChart" class="mt-4 flex h-44 items-end justify-around gap-2 border-b border-slate-100 pb-1" aria-label="Resolved ticket categories"></div></section>
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-3"><div class="flex flex-wrap items-start justify-between gap-3"><div><h3 class="font-bold text-slate-800">Monthly ticket volume by current status</h3><p class="text-xs text-slate-400">Tickets created in each month · 12 months · all range</p></div><div class="flex gap-4 text-xs"><span class="text-amber-600">● Resolved</span><span class="text-cyan-700">● Open</span></div></div><div id="monthlyChart" class="mt-3 overflow-hidden" aria-label="Monthly ticket trend"></div></section>
-          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-1"><div><h3 class="font-bold text-slate-800">Open workload</h3><p class="text-xs text-slate-400">Pending tickets by assignee</p></div><div id="assigneeWorkload" class="mt-4 space-y-3"></div></section>
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-1"><div><h3 class="font-bold text-slate-800">Pending by assignee</h3><p class="text-xs text-slate-400">টিকিট খুলে এখান থেকেই Done করুন</p></div><div id="assigneeWorkload" class="mt-4 space-y-2"></div></section>
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-2"><div class="flex flex-wrap items-center justify-between gap-2"><div><h3 class="font-bold text-slate-800">Recent tickets</h3><p id="recentTicketCount" class="text-xs text-slate-400">Latest support requests and assignees</p></div><div class="flex items-center gap-3"><button id="clearTicketFilters" type="button" class="hidden text-xs font-semibold text-rose-600 hover:underline">Clear filters</button><a href="/admin" class="text-xs font-semibold text-blue-700 hover:underline">Ticket manager →</a></div></div><ul id="dashboardRecent" class="mt-2 divide-y divide-slate-100"></ul><p id="dashboardEmpty" class="hidden py-6 text-center text-sm text-slate-400">এখনো কোনো টিকিট নেই</p></section>
         </div>
         <p id="dashboardError" role="status" class="mt-3 hidden rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
@@ -470,21 +470,32 @@
       const workload = new Map();
       pendingTickets.forEach((ticket) => {
         const name = (ticket.assigned_to || '').trim() || 'Unassigned';
-        workload.set(name, (workload.get(name) || 0) + 1);
+        if (!workload.has(name)) workload.set(name, []);
+        workload.get(name).push(ticket);
       });
-      const rows = [...workload.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
-      const max = Math.max(1, ...rows.map((row) => row[1]));
-      el.assigneeWorkload.replaceChildren(...rows.map(([name, count]) => {
-        const row = document.createElement('div');
-        const title = document.createElement('div'); title.className = 'mb-1 flex justify-between gap-2 text-xs';
-        const label = document.createElement('span'); label.className = 'truncate font-medium text-slate-600'; label.textContent = name;
-        const value = document.createElement('strong'); value.className = 'text-slate-800'; value.textContent = String(count);
-        title.append(label, value);
-        const track = document.createElement('div'); track.className = 'h-2 overflow-hidden rounded-full bg-slate-100';
-        const bar = document.createElement('div'); bar.className = `h-full rounded-full ${name === 'Unassigned' ? 'bg-rose-400' : 'bg-violet-500'}`; bar.style.width = `${count / max * 100}%`;
-        track.append(bar); row.append(title, track); return row;
+      const groups = [...workload.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+      el.assigneeWorkload.replaceChildren(...groups.map(([name, tickets]) => {
+        const group = document.createElement('details');
+        group.className = 'overflow-hidden rounded-xl border border-slate-200 bg-white';
+        const summary = document.createElement('summary');
+        summary.className = 'flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs hover:bg-slate-50';
+        const label = document.createElement('span'); label.className = 'min-w-0 truncate font-semibold text-slate-700'; label.textContent = name;
+        const count = document.createElement('span'); count.className = 'shrink-0 rounded-full bg-amber-100 px-2 py-1 font-bold text-amber-800'; count.textContent = `${toBnDigits(tickets.length)} Pending`;
+        summary.append(label, count);
+        const list = document.createElement('ul'); list.className = 'divide-y divide-slate-100 border-t border-slate-100';
+        tickets.forEach((ticket) => {
+          const item = document.createElement('li'); item.className = 'flex items-center justify-between gap-2 px-3 py-2';
+          const info = document.createElement('div'); info.className = 'min-w-0';
+          const person = document.createElement('p'); person.className = 'truncate text-xs font-semibold text-slate-700'; person.textContent = ticket.employee?.Name || ticket.ticket_number;
+          const issue = document.createElement('p'); issue.className = 'truncate text-[10px] text-slate-400'; issue.textContent = `${ticket.ticket_number} · ${ticket.problem || 'No description'}`;
+          info.append(person, issue);
+          const done = document.createElement('button'); done.type = 'button'; done.className = 'shrink-0 rounded-lg bg-emerald-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50'; done.textContent = 'Done';
+          done.addEventListener('click', () => convertToDone(ticket.id, done, false));
+          item.append(info, done); list.append(item);
+        });
+        group.append(summary, list); return group;
       }));
-      if (!rows.length) el.assigneeWorkload.textContent = 'No open tickets';
+      if (!groups.length) el.assigneeWorkload.textContent = 'No open tickets';
       const unassigned = pendingTickets.filter((ticket) => !(ticket.assigned_to || '').trim()).length;
       el.dashUnassigned.textContent = toBnDigits(unassigned);
       const oldest = pendingTickets.reduce((maxAge, ticket) => Math.max(maxAge, Date.now() - new Date(ticket.created_at).getTime()), 0);
@@ -867,7 +878,7 @@
     }
 
     // ---------- Pending → Done ----------
-    async function convertToDone(id, btn) {
+    async function convertToDone(id, btn, showTicketResult = true) {
       if (state.busy) return;
       state.busy = true;
       const original = btn.textContent;
@@ -876,8 +887,8 @@
       try {
         const { ok, status, data } = await api(`/api/tickets/${encodeURIComponent(id)}/done`, { method: 'POST' });
         if (ok && data.ticket) {
-          showResult(data.ticket);
-          if (data.already_done) showToast(data.message, 'info');
+          if (showTicketResult) showResult(data.ticket);
+          showToast(data.message || 'Ticket completed.', 'info');
           loadPending();
           loadDashboard();
           return;

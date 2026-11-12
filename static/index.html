@@ -257,12 +257,12 @@
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-600 to-blue-600 text-xl text-white shadow-md" aria-hidden="true">✦</span>
           <div class="min-w-0"><h2 id="ticketAssistantTitle" class="truncate font-bold text-slate-900">Ticket Assistant</h2><p class="text-xs text-slate-500">কথা বলেই ticket তৈরি করুন</p></div>
           </div>
-          <span id="assistantConnectionBadge" class="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700">Groq API key দরকার</span>
+          <span id="assistantConnectionBadge" class="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700">AI সংযোগ নেই</span>
         </header>
 
           <div id="assistantMessages" class="max-h-80 space-y-3 overflow-y-auto bg-slate-50/70 p-4" aria-live="polite" aria-label="Ticket assistant conversation">
           <div class="flex justify-start"><p class="max-w-[92%] rounded-2xl rounded-tl-md border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed text-slate-700 shadow-sm">হ্যালো! কর্মীর নাম ও সমস্যাটা লিখুন। যেমন: “Sumaiya-এর PC চালু হচ্ছে না, assign Rupok-কে।”</p></div>
-          <div id="assistantPreviewNotice" class="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">GROQ_API_KEY server-এ সেট হলে chat থেকে Pending ticket তৈরি হবে।</div>
+          <div id="assistantPreviewNotice" class="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">AI service server-এ সেট হলে chat থেকে Pending ticket তৈরি হবে।</div>
         </div>
 
         <div class="border-t border-slate-100 bg-white p-4">
@@ -274,7 +274,7 @@
           <label for="assistantInput" class="sr-only">Ticket assistant-কে message লিখুন</label>
           <div class="flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm focus-within:border-cyan-400 focus-within:ring-4 focus-within:ring-cyan-500/10">
             <textarea id="assistantInput" rows="2" maxlength="1200" placeholder="কর্মীর নাম ও সমস্যাটা লিখুন..." class="max-h-28 min-h-12 flex-1 resize-y border-0 bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" aria-describedby="assistantStatus"></textarea>
-            <button id="assistantSend" type="button" disabled title="Groq API সংযোগ হলে চালু হবে" class="flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-slate-300 px-3 text-xs font-bold text-white" aria-label="Send message">Send <span aria-hidden="true">➤</span></button>
+            <button id="assistantSend" type="button" disabled title="AI service সংযোগ হলে চালু হবে" class="flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-slate-300 px-3 text-xs font-bold text-white" aria-label="Send message">Send <span aria-hidden="true">➤</span></button>
           </div>
           <div id="assistantEmployeeOptions" class="mt-2 hidden max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg" role="listbox" aria-label="Employee suggestions"></div>
           <div id="assistantAssigneeOptions" class="mt-2 hidden max-h-48 overflow-y-auto rounded-xl border border-violet-200 bg-white p-1 shadow-lg" role="listbox" aria-label="IT assignee suggestions"></div>
@@ -282,7 +282,7 @@
             <span id="assistantSelectedPersonLabel" class="min-w-0 truncate font-semibold"></span>
             <button id="assistantClearPerson" type="button" class="shrink-0 rounded-lg px-2 py-1 font-semibold text-cyan-700 hover:bg-cyan-100">Remove</button>
           </div>
-          <p id="assistantStatus" class="mt-2 text-center text-[10px] text-slate-400">Groq API যুক্ত হলে message পাঠানো ও ticket তৈরি চালু হবে</p>
+          <p id="assistantStatus" class="mt-2 text-center text-[10px] text-slate-400">AI service যুক্ত হলে message পাঠানো ও ticket তৈরি চালু হবে</p>
         </div>
       </section>
       </section>
@@ -586,9 +586,9 @@
         ? 'flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-cyan-700 px-3 text-xs font-bold text-white hover:bg-cyan-800 disabled:cursor-wait disabled:opacity-60'
         : 'flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-slate-300 px-3 text-xs font-bold text-white';
       el.assistantStatus.textContent = assistantEnabled
-        ? 'Groq AI চালু আছে · শুধু Pending ticket তৈরি হবে'
-        : 'GROQ_API_KEY server environment-এ সেট হলে chat চালু হবে';
-      el.assistantConnectionBadge.textContent = assistantEnabled ? 'Groq connected' : 'Groq API key দরকার';
+        ? 'AI চালু আছে · শুধু Pending ticket তৈরি হবে'
+        : 'AI service server environment-এ সেট হলে chat চালু হবে';
+      el.assistantConnectionBadge.textContent = assistantEnabled ? 'AI connected' : 'AI সংযোগ নেই';
       el.assistantConnectionBadge.className = assistantEnabled
         ? 'shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700'
         : 'shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700';
@@ -1281,7 +1281,7 @@
       button.addEventListener('click', () => {
         el.assistantInput.value = button.dataset.assistantPrompt;
         el.assistantInput.focus();
-        el.assistantStatus.textContent = 'Example বসানো হয়েছে। Groq API যুক্ত হলে এটি পাঠাতে পারবেন।';
+        el.assistantStatus.textContent = 'Example বসানো হয়েছে। AI service যুক্ত হলে এটি পাঠাতে পারবেন।';
       });
     });
     el.assistantSend.addEventListener('click', () => sendAssistantMessage());

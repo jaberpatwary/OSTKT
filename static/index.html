@@ -254,6 +254,12 @@
             <textarea id="assistantInput" rows="2" maxlength="1200" placeholder="কর্মীর নাম ও সমস্যাটা লিখুন..." class="max-h-28 min-h-12 flex-1 resize-y border-0 bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" aria-describedby="assistantStatus"></textarea>
             <button id="assistantSend" type="button" disabled title="Groq API সংযোগ হলে চালু হবে" class="flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-slate-300 px-3 text-xs font-bold text-white" aria-label="Send message">Send <span aria-hidden="true">➤</span></button>
           </div>
+          <div id="assistantEmployeeOptions" class="mt-2 hidden max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg" role="listbox" aria-label="Employee suggestions"></div>
+          <div id="assistantAssigneeOptions" class="mt-2 hidden max-h-48 overflow-y-auto rounded-xl border border-violet-200 bg-white p-1 shadow-lg" role="listbox" aria-label="IT assignee suggestions"></div>
+          <div id="assistantSelectedPerson" class="mt-2 hidden items-center justify-between gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-900">
+            <span id="assistantSelectedPersonLabel" class="min-w-0 truncate font-semibold"></span>
+            <button id="assistantClearPerson" type="button" class="shrink-0 rounded-lg px-2 py-1 font-semibold text-cyan-700 hover:bg-cyan-100">Remove</button>
+          </div>
           <p id="assistantStatus" class="mt-2 text-center text-[10px] text-slate-400">Groq API যুক্ত হলে message পাঠানো ও ticket তৈরি চালু হবে</p>
         </div>
       </section>
@@ -320,6 +326,9 @@
       assistantInput: $('assistantInput'), assistantStatus: $('assistantStatus'),
       assistantMessages: $('assistantMessages'), assistantSend: $('assistantSend'), assistantPreviewNotice: $('assistantPreviewNotice'),
       assistantConnectionBadge: $('assistantConnectionBadge'),
+      assistantEmployeeOptions: $('assistantEmployeeOptions'), assistantAssigneeOptions: $('assistantAssigneeOptions'),
+      assistantSelectedPerson: $('assistantSelectedPerson'), assistantSelectedPersonLabel: $('assistantSelectedPersonLabel'),
+      assistantClearPerson: $('assistantClearPerson'),
       dashTotal: $('dashTotal'), dashPending: $('dashPending'), dashDone: $('dashDone'), dashToday: $('dashToday'),
       dashboardRecent: $('dashboardRecent'), dashboardEmpty: $('dashboardEmpty'),
       dashboardCompletionRate: $('dashCompletionRate'), dashboardProgress: $('dashboardProgress'),
@@ -357,6 +366,14 @@
     const assistantConversation = [];
     let assistantEnabled = false;
     let assistantSelectedEmployeeID = '';
+    let assistantSelectedEmployeeName = '';
+    let assistantSearchSequence = 0;
+    let assistantSearchTimer = null;
+    const assistantAssignees = [
+      'Rupok Kumar Roy', 'Towhedul Islam', 'Md. Imam Hossan Chowdhury',
+      'Muhammad Fokhrul Hasan', 'Md. Tanvir Ahamed Sarkar', 'Md. Fahad Hossen',
+      'Mabubul Alam Patwary',
+    ];
 
     // ---------- ছোট হেল্পার ----------
     const show = (node) => node.classList.remove('hidden');
@@ -416,13 +433,97 @@
         button.className = 'rounded-xl border border-cyan-200 bg-white px-3 py-2 text-left text-xs shadow-sm hover:bg-cyan-50';
         button.textContent = `${match.name} · ${match.employee_id}${match.department ? ` · ${match.department}` : ''}`;
         button.addEventListener('click', () => {
-          assistantSelectedEmployeeID = match.employee_id;
+          setAssistantEmployee({ name: match.name, employee_id: match.employee_id });
           sendAssistantMessage(`আমি ${match.name} (ID ${match.employee_id})-কে বেছে নিচ্ছি।`);
         });
         group.append(button);
       });
       el.assistantMessages.append(group);
       el.assistantMessages.scrollTop = el.assistantMessages.scrollHeight;
+    }
+
+    function setAssistantEmployee(employee) {
+      assistantSelectedEmployeeID = employee.EmployeeID || employee.employee_id || '';
+      assistantSelectedEmployeeName = employee.Name || employee.name || '';
+      el.assistantSelectedPersonLabel.textContent = `কর্মী: ${assistantSelectedEmployeeName} · ID ${assistantSelectedEmployeeID}`;
+      el.assistantSelectedPerson.classList.remove('hidden');
+      el.assistantSelectedPerson.classList.add('flex');
+      hide(el.assistantEmployeeOptions);
+    }
+
+    function clearAssistantEmployee() {
+      assistantSelectedEmployeeID = '';
+      assistantSelectedEmployeeName = '';
+      el.assistantSelectedPerson.classList.add('hidden');
+      el.assistantSelectedPerson.classList.remove('flex');
+    }
+
+    function assistantEmployeeQuery(text) {
+      let query = text.trim();
+      query = query.replace(/^(?:(?:please|create|make|open|submit|new|i need)\s+)*(?:a\s+)?(?:ticket\s+)?(?:for\s+)?/i, '');
+      query = query.replace(/^(?:for|employee|user|name)\s*[:\-]?\s*/i, '');
+      const marker = query.search(/\b(?:problem|issue|pc|computer|laptop|network|printer|internet|email|password|login|broken|assign(?:ed|ee)?|assing)\b|(?:\s+(?:er|এর|for)\s+)|(?:এর\s+জন্য)|(?:[-–—]এর)\b/i);
+      if (marker >= 0) query = query.slice(0, marker);
+      return query.replace(/(?:'s|’s)$/i, '').trim().replace(/[.,!?;:]+$/g, '').trim();
+    }
+
+    function renderAssistantAssignees(query) {
+      const q = query.toLocaleLowerCase();
+      const matches = assistantAssignees.filter((name) => !q || name.toLocaleLowerCase().includes(q));
+      el.assistantEmployeeOptions.classList.add('hidden');
+      el.assistantAssigneeOptions.replaceChildren(...matches.map((name) => {
+        const option = document.createElement('button'); option.type = 'button'; option.setAttribute('role', 'option');
+        option.className = 'block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-violet-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-500';
+        option.textContent = `👤 ${name}`;
+        option.addEventListener('click', () => {
+          const current = el.assistantInput.value;
+          const marker = /\b(?:assign(?:ed|ee)?|assing)\b(?:\s+(?:to|by))?\s*.*$/i;
+          const found = current.match(marker);
+          const prefix = found ? current.slice(0, found.index).trimEnd() : current.trimEnd();
+          el.assistantInput.value = `${prefix}${prefix ? ' ' : ''}assign to ${name}`;
+          hide(el.assistantAssigneeOptions);
+          el.assistantInput.focus();
+        });
+        return option;
+      }));
+      el.assistantAssigneeOptions.classList.toggle('hidden', matches.length === 0);
+    }
+
+    function updateAssistantSuggestions() {
+      const sequence = ++assistantSearchSequence;
+      clearTimeout(assistantSearchTimer);
+      const text = el.assistantInput.value;
+      const assigneeMatch = text.match(/\b(?:assign(?:ed|ee)?|assing)\b(?:\s+(?:to|by))?\s*(.*)$/i);
+      if (assigneeMatch) {
+        renderAssistantAssignees(assigneeMatch[1].trim());
+        hide(el.assistantEmployeeOptions);
+        return;
+      }
+      hide(el.assistantAssigneeOptions);
+      const query = assistantEmployeeQuery(text);
+      if (query.length < 2) {
+        hide(el.assistantEmployeeOptions);
+        return;
+      }
+      assistantSearchTimer = setTimeout(async () => {
+        try {
+          const { ok, data } = await api('/api/search?q=' + encodeURIComponent(query));
+          if (!ok || sequence !== assistantSearchSequence) return;
+          const matches = Array.isArray(data.matches) ? data.matches : [];
+          el.assistantEmployeeOptions.replaceChildren(...matches.map((employee) => {
+            const option = document.createElement('button'); option.type = 'button'; option.setAttribute('role', 'option');
+            option.className = 'block w-full rounded-lg px-3 py-2 text-left hover:bg-cyan-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500';
+            const name = document.createElement('span'); name.className = 'block text-xs font-semibold text-slate-800'; name.textContent = employee.Name || '';
+            const meta = document.createElement('span'); meta.className = 'mt-0.5 block text-[10px] text-slate-500'; meta.textContent = `ID ${employee.EmployeeID || '—'} · ${employee.Department || '—'}`;
+            option.append(name, meta);
+            option.addEventListener('click', () => { setAssistantEmployee(employee); el.assistantInput.focus(); });
+            return option;
+          }));
+          el.assistantEmployeeOptions.classList.toggle('hidden', matches.length === 0);
+        } catch (_) {
+          if (sequence === assistantSearchSequence) hide(el.assistantEmployeeOptions);
+        }
+      }, 180);
     }
 
     async function loadAssistantStatus() {
@@ -455,7 +556,13 @@
       appendAssistantMessage('user', content);
       el.assistantInput.value = '';
       const selectedEmployeeID = assistantSelectedEmployeeID;
-      assistantSelectedEmployeeID = '';
+      const selectedEmployeeName = assistantSelectedEmployeeName;
+      if (selectedEmployeeID && selectedEmployeeName) {
+        const selectionMessage = `Employee selected by user: ${selectedEmployeeName}, employee ID ${selectedEmployeeID}.`;
+        assistantConversation.push({ role: 'user', content: selectionMessage });
+        appendAssistantMessage('user', `কর্মী বেছে নিয়েছি: ${selectedEmployeeName} · ID ${selectedEmployeeID}`);
+      }
+      if (assistantConversation.length > 12) assistantConversation.splice(0, assistantConversation.length - 12);
       el.assistantSend.disabled = true;
       el.assistantSend.textContent = '⏳';
       el.assistantStatus.textContent = 'কর্মী ও সমস্যার তথ্য দেখা হচ্ছে…';
@@ -466,6 +573,7 @@
         });
         if (!ok) throw new Error(data.error || `Chat request failed (${status})`);
         const reply = data.reply || 'আর কোনো তথ্য লাগলে লিখুন।';
+        clearAssistantEmployee();
         appendAssistantMessage('assistant', reply);
         if (data.created && data.ticket) {
           appendAssistantTicket(data.ticket);
@@ -1122,6 +1230,8 @@
       });
     });
     el.assistantSend.addEventListener('click', () => sendAssistantMessage());
+    el.assistantInput.addEventListener('input', updateAssistantSuggestions);
+    el.assistantClearPerson.addEventListener('click', clearAssistantEmployee);
     el.assistantInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();

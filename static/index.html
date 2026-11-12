@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#2563eb" />
+  <script>try { if (localStorage.getItem('ost-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (_) {}</script>
   <title>Auto Ticket System</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎫</text></svg>" />
 
@@ -91,6 +92,7 @@
       * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
   </style>
+  <link rel="stylesheet" href="/theme.css" />
 </head>
 
 <body class="min-h-screen bg-gradient-to-b from-blue-50 via-sky-50/50 to-white bg-fixed text-slate-800 antialiased">
@@ -116,6 +118,7 @@
             <p class="mt-1 text-sm text-slate-500">Support load, issue trends, resolution progress এবং team activity</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
+            <button id="themeToggle" type="button" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50" aria-pressed="false">🌙 Dark mode</button>
             <span id="dashboardUpdated" class="mr-1 text-xs text-slate-400">লোড হচ্ছে…</span>
             <button id="dashboardRefresh" type="button" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60">↻ Refresh</button>
             <a href="#ticketSection" class="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-cyan-800">＋ Create ticket</a>
@@ -1306,5 +1309,6 @@
     if (window.matchMedia('(pointer: fine)').matches) el.nameInput.focus();
   })();
   </script>
+  <script src="/theme.js"></script>
 </body>
 </html>

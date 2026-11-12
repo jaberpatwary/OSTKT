@@ -4,11 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#eff6ff" />
+  <script>try { if (localStorage.getItem('ost-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (_) {}</script>
   <title>Admin Panel — Auto Ticket System</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="stylesheet" href="/theme.css" />
   <style>
     body { font-family: 'Hind Siliguri', system-ui, sans-serif; }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
@@ -22,7 +24,7 @@
         <h1 class="mt-1 text-3xl font-bold text-slate-900">Admin Panel</h1>
         <p class="mt-1 text-slate-500">টিকিট দেখুন, status filter করুন, Pending টিকিট Done করুন।</p>
       </div>
-      <nav class="flex flex-wrap gap-2"><a href="/" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm hover:bg-slate-100">← Ticket Form</a><a href="/dashboard" class="inline-flex items-center rounded-xl border border-cyan-200 bg-white px-4 py-2 font-semibold text-cyan-700 shadow-sm hover:bg-cyan-50">Dashboard</a></nav>
+      <nav class="flex flex-wrap gap-2"><button id="themeToggle" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm hover:bg-slate-100" aria-pressed="false">🌙 Dark mode</button><a href="/" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm hover:bg-slate-100">← Ticket Form</a><a href="/dashboard" class="inline-flex items-center rounded-xl border border-cyan-200 bg-white px-4 py-2 font-semibold text-cyan-700 shadow-sm hover:bg-cyan-50">Dashboard</a></nav>
     </header>
 
     <section aria-label="Ticket summary" class="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -323,5 +325,6 @@
     loadTickets();
   })();
   </script>
+  <script src="/theme.js"></script>
 </body>
 </html>

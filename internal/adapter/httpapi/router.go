@@ -85,6 +85,8 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 	site.StaticFile("/", "./static/index.html")
 	site.StaticFile("/dashboard", "./static/index.html")
 	site.StaticFile("/admin", "./static/admin.html")
+	site.StaticFile("/theme.css", "./static/theme.css")
+	site.StaticFile("/theme.js", "./static/theme.js")
 
 	api := site.Group("/api")
 	api.GET("/search", handler.searchEmployees)

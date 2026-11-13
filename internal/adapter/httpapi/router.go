@@ -92,6 +92,7 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 	api.GET("/search", handler.searchEmployees)
 	api.GET("/assistant/status", handler.assistantStatus)
 	api.POST("/assistant", handler.assistantChat)
+	api.POST("/assistant/transcribe", handler.assistantTranscribe)
 	api.GET("/tickets", handler.listTickets)
 	api.POST("/tickets", handler.createTicket)
 	api.GET("/tickets/:id", handler.getTicket)
@@ -106,6 +107,42 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 
 func (h *Handler) assistantStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"enabled": h.assistant.Enabled()})
+}
+
+func (h *Handler) assistantTranscribe(c *gin.Context) {
+	if !h.assistant.Enabled() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Groq API is not configured yet"})
+		return
+	}
+	if !h.allowAssistantRequest(c.ClientIP(), time.Now()) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many voice requests. Wait a minute and try again."})
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 12<<20)
+	file, header, err := c.Request.FormFile("audio")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "audio recording is missing or too large"})
+		return
+	}
+	defer file.Close()
+	if header.Size == 0 || header.Size > 10<<20 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "audio must be between 1 byte and 10 MB"})
+		return
+	}
+	transcript, err := h.assistant.Transcribe(c.Request.Context(), header.Filename, file)
+	if err != nil {
+		log.Printf("assistant transcription failed: %v", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "speech transcription failed; check Groq limits and try again"})
+		return
+	}
+	if transcript == "" {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "no speech was detected; please speak louder and try again"})
+		return
+	}
+	if len([]rune(transcript)) > 1200 {
+		transcript = string([]rune(transcript)[:1200])
+	}
+	c.JSON(http.StatusOK, gin.H{"text": transcript})
 }
 
 type assistantChatRequest struct {

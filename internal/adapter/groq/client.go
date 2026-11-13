@@ -7,12 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
 )
 
 const endpoint = "https://api.groq.com/openai/v1/chat/completions"
+const transcriptionEndpoint = "https://api.groq.com/openai/v1/audio/transcriptions"
 
 type Message struct {
 	Role    string `json:"role"`
@@ -43,6 +45,53 @@ func NewClient(apiKey, model string) *Client {
 }
 
 func (c *Client) Enabled() bool { return c != nil && c.apiKey != "" }
+
+func (c *Client) Transcribe(ctx context.Context, filename string, audio io.Reader) (string, error) {
+	if !c.Enabled() {
+		return "", errors.New("assistant is not configured")
+	}
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", filename)
+	if err != nil {
+		return "", fmt.Errorf("create audio upload: %w", err)
+	}
+	if _, err := io.Copy(part, io.LimitReader(audio, 10<<20)); err != nil {
+		return "", fmt.Errorf("read audio upload: %w", err)
+	}
+	for key, value := range map[string]string{
+		"model": "whisper-large-v3-turbo", "language": "bn", "response_format": "json",
+	} {
+		if err := writer.WriteField(key, value); err != nil {
+			return "", fmt.Errorf("write transcription field: %w", err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return "", fmt.Errorf("finish audio upload: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, transcriptionEndpoint, &body)
+	if err != nil {
+		return "", fmt.Errorf("create transcription request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("call Groq transcription API: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		return "", fmt.Errorf("Groq transcription API returned HTTP %d", resp.StatusCode)
+	}
+	var result struct {
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+		return "", fmt.Errorf("decode transcription response: %w", err)
+	}
+	return strings.TrimSpace(result.Text), nil
+}
 
 func (c *Client) ExtractTicket(ctx context.Context, conversation []Message) (TicketDetails, error) {
 	if !c.Enabled() {

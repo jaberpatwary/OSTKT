@@ -37,6 +37,17 @@ html.dark .shadow-sm, html.dark .shadow-lg, html.dark .shadow-xl, html.dark .sha
 html.dark #dashboardSection, html.dark #ticketSection, html.dark #assistantMessages { color: #e2e8f0; }
 html.dark #dashboardSection::-webkit-scrollbar-thumb, html.dark #ticketSection::-webkit-scrollbar-thumb { background: #475569; background-clip: padding-box; }
 
+.assistant-panel { background: linear-gradient(145deg, #ffffff 0%, #f7fcff 100%); }
+.assistant-messages { scrollbar-width: thin; scrollbar-color: #b8dce8 transparent; }
+.assistant-composer { background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%); }
+.assistant-voice-button:focus-visible, #assistantSpeakToggle:focus-visible { outline: 3px solid rgb(6 182 212 / .35); outline-offset: 2px; }
+html.dark .assistant-panel { background: linear-gradient(145deg, #172033 0%, #101b2c 100%); }
+html.dark .assistant-composer { background: #172033; }
+@media (prefers-reduced-motion: no-preference) {
+  .assistant-avatar { animation: assistant-float 4s ease-in-out infinite; }
+  @keyframes assistant-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   body, body * { transition: background-color .18s ease, border-color .18s ease, color .18s ease; }
 }

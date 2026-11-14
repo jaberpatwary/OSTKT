@@ -29,6 +29,7 @@ var (
 
 type EmployeeDirectory interface {
 	Search(query string, limit int) []domain.Employee
+	All() []domain.Employee
 	Resolve(name, employeeID string) []domain.Employee
 }
 
@@ -74,6 +75,10 @@ func NewTicketService(repository domain.TicketRepository, employees EmployeeDire
 
 func (s *TicketService) SearchEmployees(query string, limit int) []domain.Employee {
 	return s.employees.Search(query, limit)
+}
+
+func (s *TicketService) ListEmployees() []domain.Employee {
+	return s.employees.All()
 }
 
 func (s *TicketService) Create(ctx context.Context, input CreateTicketInput) (domain.Ticket, bool, error) {

@@ -92,7 +92,7 @@
       * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
   </style>
-  <link rel="stylesheet" href="/theme.css" />
+  <link rel="stylesheet" href="/theme.css?v=20261115" />
 </head>
 
 <body class="min-h-screen bg-gradient-to-b from-blue-50 via-sky-50/50 to-white bg-fixed text-slate-800 antialiased">
@@ -172,7 +172,7 @@
       <div class="relative mt-8">
         <label for="nameInput" class="sr-only">কর্মীর নাম</label>
         <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-xl" aria-hidden="true">🔍</span>
-        <input id="nameInput" type="text" autocomplete="off" autocapitalize="words" spellcheck="false"
+        <input id="nameInput" name="employee-directory-query" type="search" autocomplete="off" autocapitalize="words" spellcheck="false"
           placeholder="নাম লিখুন..."
           role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions"
           class="w-full rounded-2xl border-2 border-slate-200 bg-white py-4 pl-12 pr-12 text-lg shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/15" />
@@ -256,9 +256,10 @@
         <header class="flex items-center justify-between gap-3 border-b border-cyan-100 bg-gradient-to-r from-cyan-50 via-sky-50 to-blue-50 px-4 py-4 sm:px-5">
           <div class="flex min-w-0 items-center gap-3">
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-600 to-blue-600 text-xl text-white shadow-md" aria-hidden="true">✦</span>
-          <div class="min-w-0"><h2 id="ticketAssistantTitle" class="truncate font-bold text-slate-900">Ticket Assistant</h2><p class="text-xs text-slate-500">কথা বলেই ticket তৈরি করুন</p></div>
+          <div class="min-w-0"><h2 id="ticketAssistantTitle" class="truncate font-bold text-slate-900">Ticket Assistant</h2><p class="text-xs text-slate-500">কর্মীর নাম → সমস্যা → assign by নাম</p></div>
           </div>
           <span id="assistantConnectionBadge" class="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700">AI সংযোগ নেই</span>
+          <button id="assistantExpand" type="button" class="shrink-0 rounded-xl border border-cyan-200 bg-white/80 px-2.5 py-2 text-sm text-slate-600 hover:bg-white" aria-label="Expand chat" title="Expand chat">⛶</button>
         </header>
 
           <div id="assistantMessages" class="assistant-messages max-h-80 space-y-3 overflow-y-auto bg-slate-50/70 p-4 sm:p-5" aria-live="polite" aria-label="Ticket assistant conversation">
@@ -268,19 +269,22 @@
 
           <div class="assistant-composer border-t border-slate-100 bg-white p-4 sm:p-5">
           <p class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Try an example</p>
-          <div class="mb-3 flex flex-wrap gap-2">
+          <div id="assistantExamples" class="mb-3 hidden flex-wrap gap-2">
             <button type="button" data-assistant-prompt="Sumaiya-এর laptop-এ network সমস্যা হচ্ছে, assign Rupok-কে" class="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-left text-[11px] text-slate-600 transition hover:border-cyan-300 hover:bg-cyan-50">Network সমস্যা assign করুন</button>
             <button type="button" data-assistant-prompt="Towhedul Islam-এর জন্য printer কাজ করছে না ticket করুন" class="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-left text-[11px] text-slate-600 transition hover:border-cyan-300 hover:bg-cyan-50">Printer issue ticket</button>
           </div>
           <label for="assistantInput" class="sr-only">Ticket assistant-কে message লিখুন</label>
-          <div class="flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm focus-within:border-cyan-400 focus-within:ring-4 focus-within:ring-cyan-500/10">
-            <textarea id="assistantInput" rows="2" maxlength="1200" placeholder="কর্মীর নাম ও সমস্যাটা লিখুন..." class="max-h-28 min-h-12 flex-1 resize-y border-0 bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" aria-describedby="assistantStatus"></textarea>
-            <button id="assistantSend" type="button" disabled title="AI service সংযোগ হলে চালু হবে" class="flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-slate-300 px-3 text-xs font-bold text-white" aria-label="Send message">Send <span aria-hidden="true">➤</span></button>
+          <div class="assistant-compose-bar flex items-end gap-2 rounded-full border border-slate-200 bg-white p-2 shadow-sm focus-within:border-cyan-400 focus-within:ring-4 focus-within:ring-cyan-500/10">
+            <button id="assistantExamplesToggle" type="button" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-2xl text-slate-500 hover:bg-slate-100" aria-label="Show examples" aria-expanded="false" title="Show examples">＋</button>
+            <textarea id="assistantInput" rows="1" maxlength="1200" placeholder="Ask Ticket Assistant…" class="max-h-28 min-h-10 flex-1 resize-y border-0 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-slate-400" aria-describedby="assistantStatus"></textarea>
+            <button id="assistantSend" type="button" disabled title="AI service সংযোগ হলে চালু হবে" class="assistant-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-300 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" aria-label="Send message">↑</button>
           </div>
           <div class="mt-2 flex items-center justify-between gap-2">
-            <button id="assistantMic" type="button" class="assistant-voice-button rounded-xl bg-gradient-to-r from-cyan-700 to-blue-700 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-cyan-700/20 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50" aria-label="Voice input">🎙️ Speak</button>
-            <button id="assistantSpeakToggle" type="button" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-600 transition hover:border-cyan-300 hover:bg-cyan-50" aria-pressed="false">🔈 Read replies: Off</button>
+            <button id="assistantMic" type="button" class="assistant-icon-button rounded-full border border-slate-200 bg-white text-lg text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Start voice chat" title="Start voice chat">🎙️ Speak</button>
+            <button id="assistantSpeakToggle" type="button" class="assistant-icon-button rounded-full bg-blue-600 text-lg text-white shadow-md shadow-blue-700/25 hover:bg-blue-700" aria-label="Toggle spoken replies" title="Toggle spoken replies" aria-pressed="false">◖)))</button>
           </div>
+          <details id="assistantAudioSettings" class="mt-2 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-[11px] text-slate-500">
+          <summary class="cursor-pointer select-none font-semibold text-slate-500">Microphone & language settings</summary>
           <div class="mt-2 flex items-center gap-2 text-[11px] text-slate-500">
             <label for="assistantMicDevice" class="shrink-0">Microphone</label>
             <select id="assistantMicDevice" class="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700">
@@ -288,6 +292,15 @@
             </select>
             <button id="assistantMicRefresh" type="button" class="shrink-0 rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50" title="Refresh microphone list">Refresh</button>
           </div>
+          <div class="mt-2 flex items-center gap-2 text-[11px] text-slate-500">
+            <label for="assistantVoiceLanguage" class="shrink-0">Voice language</label>
+            <select id="assistantVoiceLanguage" class="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700" aria-label="Voice recognition language">
+              <option value="auto">Auto detect</option>
+              <option value="bn">বাংলা</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+          </details>
           <div class="mt-1 text-center text-[10px] text-slate-400">আপনার voice message AI দিয়ে text-এ রূপান্তর করে assistant-এ পাঠানো হবে।</div>
           <div id="assistantEmployeeOptions" class="mt-2 hidden max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg" role="listbox" aria-label="Employee suggestions"></div>
           <div id="assistantAssigneeOptions" class="mt-2 hidden max-h-48 overflow-y-auto rounded-xl border border-violet-200 bg-white p-1 shadow-lg" role="listbox" aria-label="IT assignee suggestions"></div>
@@ -359,8 +372,9 @@
       actionButtons: $('actionButtons'), doneBtn: $('doneBtn'), pendingBtn: $('pendingBtn'), doneSub: $('doneSub'),
       pendingPanel: $('pendingPanel'), pendingCount: $('pendingCount'), pendingList: $('pendingList'),
       assistantInput: $('assistantInput'), assistantStatus: $('assistantStatus'),
-      assistantMic: $('assistantMic'), assistantSpeakToggle: $('assistantSpeakToggle'),
-      assistantMicDevice: $('assistantMicDevice'), assistantMicRefresh: $('assistantMicRefresh'),
+      assistantMic: $('assistantMic'), assistantSpeakToggle: $('assistantSpeakToggle'), assistantExpand: $('assistantExpand'),
+      assistantExamples: $('assistantExamples'), assistantExamplesToggle: $('assistantExamplesToggle'),
+      assistantMicDevice: $('assistantMicDevice'), assistantMicRefresh: $('assistantMicRefresh'), assistantVoiceLanguage: $('assistantVoiceLanguage'),
       assistantMessages: $('assistantMessages'), assistantSend: $('assistantSend'), assistantPreviewNotice: $('assistantPreviewNotice'),
       assistantConnectionBadge: $('assistantConnectionBadge'),
       assistantEmployeeOptions: $('assistantEmployeeOptions'), assistantAssigneeOptions: $('assistantAssigneeOptions'),
@@ -384,6 +398,15 @@
     };
     el.assistantMic.disabled = !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder || !window.AudioContext;
     if (el.assistantMic.disabled) el.assistantMic.title = 'Microphone recording is not supported in this browser';
+    const assistantComposerRow = el.assistantInput.parentElement;
+    const oldAssistantVoiceToolbar = el.assistantMic.parentElement;
+    assistantComposerRow.insertBefore(el.assistantMic, el.assistantSend);
+    assistantComposerRow.insertBefore(el.assistantSpeakToggle, el.assistantSend);
+    el.assistantMic.className = 'assistant-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-lg text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
+    el.assistantSpeakToggle.className = 'assistant-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-lg text-white shadow-md shadow-blue-700/25 hover:bg-blue-700';
+    el.assistantMic.textContent = '🎙️';
+    el.assistantSpeakToggle.textContent = '◖)))';
+    oldAssistantVoiceToolbar.classList.add('hidden');
 
     document.title = 'Auto Ticket System · Operations Dashboard';
 
@@ -457,6 +480,7 @@
       row.append(bubble);
       el.assistantMessages.append(row);
       el.assistantMessages.scrollTop = el.assistantMessages.scrollHeight;
+      return row;
     }
 
     function appendAssistantTicket(ticket) {
@@ -607,9 +631,9 @@
         assistantEnabled = false;
       }
       el.assistantSend.disabled = !assistantEnabled;
-      el.assistantSend.className = assistantEnabled
-        ? 'flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-cyan-700 px-3 text-xs font-bold text-white hover:bg-cyan-800 disabled:cursor-wait disabled:opacity-60'
-        : 'flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-slate-300 px-3 text-xs font-bold text-white';
+        el.assistantSend.className = assistantEnabled
+        ? 'assistant-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan-700 text-lg font-bold text-white hover:bg-cyan-800 disabled:cursor-wait disabled:opacity-60'
+        : 'assistant-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-300 text-lg font-bold text-white';
       el.assistantStatus.textContent = assistantEnabled
         ? 'AI চালু আছে · শুধু Pending ticket তৈরি হবে'
         : 'AI service server environment-এ সেট হলে chat চালু হবে';
@@ -618,15 +642,21 @@
         ? 'shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700'
         : 'shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700';
       el.assistantPreviewNotice.classList.toggle('hidden', assistantEnabled);
+      el.assistantSend.textContent = '↑';
     }
 
-    async function sendAssistantMessage(messageText, selectedAssignee = '') {
+    async function sendAssistantMessage(messageText, selectedAssignee = '', display = null) {
       if (!assistantEnabled || el.assistantSend.disabled) return;
       const content = String(messageText || el.assistantInput.value).trim();
       if (!content || content.length > 1200) return;
-      assistantConversation.push({ role: 'user', content });
+      if (display?.conversationMessage) {
+        display.conversationMessage.content = content;
+        if (display.bubble) display.bubble.textContent = content;
+      } else {
+        assistantConversation.push({ role: 'user', content });
+        appendAssistantMessage('user', content);
+      }
       if (assistantConversation.length > 12) assistantConversation.splice(0, assistantConversation.length - 12);
-      appendAssistantMessage('user', content);
       el.assistantInput.value = '';
       const selectedEmployeeID = assistantSelectedEmployeeID;
       const selectedEmployeeName = assistantSelectedEmployeeName;
@@ -638,7 +668,7 @@
       }
       if (assistantConversation.length > 12) assistantConversation.splice(0, assistantConversation.length - 12);
       el.assistantSend.disabled = true;
-      el.assistantSend.textContent = '⏳';
+      el.assistantSend.textContent = '…';
       el.assistantStatus.textContent = 'কর্মী ও সমস্যার তথ্য দেখা হচ্ছে…';
       try {
         const { ok, status, data } = await api('/api/assistant', {
@@ -653,7 +683,7 @@
         else if (assistantVoiceReplies) speakAssistantReply(reply);
         if (data.created && data.ticket) {
           assistantVoiceMode = false;
-          el.assistantMic.textContent = '🎙️ Speak';
+          el.assistantMic.textContent = '🎙️';
           appendAssistantTicket(data.ticket);
           assistantConversation.length = 0;
           assistantConversationEmployeeID = '';
@@ -675,7 +705,7 @@
         appendAssistantMessage('assistant', error.message || 'Chat service-এ সংযোগ করা যায়নি।');
         el.assistantStatus.textContent = 'আবার চেষ্টা করুন বা API configuration যাচাই করুন';
       } finally {
-        el.assistantSend.textContent = 'Send ➤';
+        el.assistantSend.textContent = '↑';
         el.assistantSend.disabled = !assistantEnabled;
       }
     }
@@ -721,14 +751,24 @@
         const inputs = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'audioinput');
         const options = [new Option(inputs.length ? 'Default input' : 'No microphone input detected', '')];
         inputs.forEach((device, index) => {
-          options.push(new Option(device.label || `Microphone ${index + 1}`, device.deviceId));
+          const label = device.label || `Microphone ${index + 1}`;
+          const isLoopback = /stereo\s*mix|loopback|what\s*u\s*hear/i.test(label);
+          options.push(new Option(isLoopback ? `${label} — speaker playback, not a mic` : label, device.deviceId));
         });
         el.assistantMicDevice.replaceChildren(...options);
         if (inputs.some((device) => device.deviceId === previous)) el.assistantMicDevice.value = previous;
         el.assistantMicDevice.disabled = inputs.length === 0;
+        if (!inputs.length && !assistantVoiceMode) {
+          el.assistantMic.title = 'Request microphone access';
+          el.assistantStatus.textContent = 'Windows input-এ আসল microphone নেই। USB/headset mic connect করুন, অথবা Remote Desktop-এ audio recording চালু করে Refresh দিন।';
+        } else if (inputs.length) {
+          el.assistantMic.title = 'Start voice chat';
+        }
         return inputs.length;
       } catch (_) {
         el.assistantMicDevice.disabled = true;
+        el.assistantMic.disabled = !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder || !window.AudioContext;
+        el.assistantStatus.textContent = 'Microphone list পড়া যায়নি। Mic button চাপলে browser permission চাইবে।';
         return 0;
       }
     }
@@ -737,15 +777,15 @@
       if (!assistantVoiceMode || assistantMediaRecorder) return;
       if (!assistantEnabled) {
         assistantVoiceMode = false;
-        el.assistantMic.textContent = '🎙️ Speak';
+        el.assistantMic.textContent = '🎙️';
         el.assistantStatus.textContent = 'Voice service এখন পাওয়া যাচ্ছে না। কিছুক্ষণ পরে আবার চেষ্টা করুন।';
         return;
       }
       el.assistantStatus.textContent = 'Microphone চালু করছি…';
-      el.assistantMic.textContent = '⏳ Checking mic…';
+      el.assistantMic.textContent = '…';
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder || !window.AudioContext) {
         assistantVoiceMode = false;
-        el.assistantMic.textContent = '🎙️ Speak';
+        el.assistantMic.textContent = '🎙️';
         el.assistantStatus.textContent = 'এই browser-এ microphone recording support নেই। Chrome বা Edge-এর latest version ব্যবহার করুন।';
         return;
       }
@@ -760,6 +800,11 @@
         const audioConstraints = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
         if (el.assistantMicDevice.value) audioConstraints.deviceId = { exact: el.assistantMicDevice.value };
         assistantMediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        const activeAudioTrack = assistantMediaStream.getAudioTracks()[0];
+        if (!activeAudioTrack) throw new DOMException('No microphone input track is available.', 'NotFoundError');
+        if (/stereo\s*mix|loopback|what\s*u\s*hear/i.test(activeAudioTrack.label)) {
+          el.assistantStatus.textContent = 'Stereo Mix computer playback ধরে; voice না এলে Microphone input connect করে সেটি বেছে নিন।';
+        }
         window.clearTimeout(micWaitTimer);
         if (!assistantVoiceMode) {
           assistantMediaStream.getTracks().forEach((track) => track.stop());
@@ -786,7 +831,7 @@
         recorder.onerror = () => {
           assistantVoiceMode = false;
           stopAssistantAudioInput();
-          el.assistantMic.textContent = '🎙️ Speak';
+          el.assistantMic.textContent = '🎙️';
           el.assistantStatus.textContent = 'Mic recording error হয়েছে। Mic permission এবং device check করে আবার চেষ্টা করো।';
         };
         recorder.onstop = async () => {
@@ -807,24 +852,41 @@
           if (!audio.size || (!speechDetected && !manualStop)) {
             el.assistantStatus.textContent = 'কথা রেকর্ড হয়নি। আবার Speak চাপো এবং Mic Allow আছে কি না দেখো।';
             assistantVoiceMode = false;
-            el.assistantMic.textContent = '🎙️ Speak';
+            el.assistantMic.textContent = '🎙️';
             return;
           }
           el.assistantStatus.textContent = 'কথা লেখা হচ্ছে…';
           try {
             const form = new FormData();
             form.append('audio', audio, 'voice.webm');
+            form.append('language', el.assistantVoiceLanguage.value || 'auto');
             const response = await fetch('/api/assistant/transcribe', { method: 'POST', body: form, cache: 'no-store' });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || `Transcription failed (${response.status})`);
             if (!assistantVoiceMode) return;
             const transcript = String(data.text || '').trim();
-            if (!transcript) throw new Error('কথা বোঝা যায়নি। একটু জোরে ও স্পষ্ট করে বলো।');
+            if (!/[\p{L}\p{N}]/u.test(transcript)) throw new Error('কথা শোনা যায়নি। আসল microphone বেছে নিয়ে আবার বলুন।');
             el.assistantInput.value = transcript;
             el.assistantInput.dispatchEvent(new Event('input', { bubbles: true }));
-            el.assistantStatus.textContent = `শুনেছি: “${transcript}” — পাঠাচ্ছি…`;
-            await sleep(700);
-            if (assistantVoiceMode) await sendAssistantMessage(transcript);
+            const conversationMessage = { role: 'user', content: transcript };
+            assistantConversation.push(conversationMessage);
+            if (assistantConversation.length > 12) assistantConversation.splice(0, assistantConversation.length - 12);
+            const voiceBubble = appendAssistantMessage('user', transcript)?.querySelector('p');
+            el.assistantStatus.textContent = `শুনেছি: “${transcript}” — ভুল থাকলে এখনই ঠিক করুন; ৩ সেকেন্ড পরে পাঠাব।`;
+            el.assistantSend.disabled = true;
+            el.assistantSend.textContent = '…';
+            await sleep(3000);
+            if (!assistantVoiceMode) {
+              el.assistantSend.disabled = !assistantEnabled;
+              el.assistantSend.textContent = '↑';
+              return;
+            }
+            const reviewedTranscript = el.assistantInput.value.trim();
+            el.assistantSend.disabled = false;
+            el.assistantSend.textContent = '↑';
+            if (reviewedTranscript) {
+              await sendAssistantMessage(reviewedTranscript, '', { conversationMessage, bubble: voiceBubble });
+            }
           } catch (error) {
             if (!assistantVoiceMode) return;
             const message = error.message || 'Voice transcription failed.';
@@ -835,7 +897,7 @@
         };
 
         recorder.start(250);
-        el.assistantMic.textContent = '⏹️ Stop & send';
+        el.assistantMic.textContent = '⏹️';
         el.assistantStatus.textContent = 'শুনছি… কথা বলো, শেষ হলে এক সেকেন্ড থামো—নিজে থেকেই পাঠাবে।';
         const monitor = () => {
           if (recorder.state !== 'recording') return;
@@ -847,7 +909,7 @@
           }
           const volume = Math.sqrt(energy / samples.length);
           const now = performance.now();
-          if (volume > 0.025) {
+          if (volume > 0.012) {
             speechDetected = true;
             lastSoundAt = now;
           }
@@ -857,7 +919,7 @@
               : `Mic চালু—এখন বলো (signal ${Math.round(volume * 100)}%)`;
             lastLevelUpdate = now;
           }
-          if ((speechDetected && now - lastSoundAt > 1100) || now - startedAt > 15000) {
+          if ((speechDetected && now - lastSoundAt > 2000) || now - startedAt > 25000) {
             recorder.stop();
             return;
           }
@@ -868,7 +930,9 @@
         window.clearTimeout(micWaitTimer);
         assistantVoiceMode = false;
         stopAssistantAudioInput();
-        el.assistantMic.textContent = '🎙️ Speak';
+        el.assistantMic.textContent = '🎙️';
+        el.assistantMic.setAttribute('aria-pressed', 'false');
+        el.assistantMic.title = 'Start voice chat';
         const message = error.name === 'NotAllowedError'
           ? 'Chrome mic access blocked. Site settings-এ localhost-এর Microphone Allow করে reload করো।'
           : error.name === 'NotFoundError'
@@ -879,6 +943,7 @@
                 ? 'Microphone অন্য app ব্যবহার করছে। অন্য app বন্ধ করে আবার চেষ্টা করো।'
             : `Mic error: ${error.name || 'unknown'}`;
         el.assistantStatus.textContent = message;
+        refreshAssistantMicDevices();
       }
     }
 
@@ -1521,6 +1586,26 @@
         el.assistantStatus.textContent = 'Example বসানো হয়েছে। AI service যুক্ত হলে এটি পাঠাতে পারবেন।';
       });
     });
+    el.assistantExamplesToggle.addEventListener('click', () => {
+      const expanded = el.assistantExamples.classList.contains('hidden');
+      el.assistantExamples.classList.toggle('hidden', !expanded);
+      el.assistantExamples.classList.toggle('flex', expanded);
+      el.assistantExamplesToggle.setAttribute('aria-expanded', String(expanded));
+    });
+    el.assistantExpand.addEventListener('click', () => {
+      const panel = el.assistantExpand.closest('.assistant-panel');
+      const expanded = panel.classList.toggle('assistant-panel-fullscreen');
+      document.body.classList.toggle('assistant-chat-expanded', expanded);
+      el.assistantExpand.textContent = expanded ? '×' : '⛶';
+      el.assistantExpand.setAttribute('aria-label', expanded ? 'Exit expanded chat' : 'Expand chat');
+      el.assistantExpand.title = expanded ? 'Exit expanded chat' : 'Expand chat';
+      if (expanded) el.assistantInput.focus();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && el.assistantExpand.closest('.assistant-panel').classList.contains('assistant-panel-fullscreen')) {
+        el.assistantExpand.click();
+      }
+    });
     el.assistantMic.addEventListener('click', () => {
       if (assistantVoiceMode) {
         if (assistantMediaRecorder?.state === 'recording') {
@@ -1528,7 +1613,7 @@
           assistantVoiceCancelled = false;
           if (assistantAudioFrame) cancelAnimationFrame(assistantAudioFrame);
           assistantAudioFrame = 0;
-          el.assistantMic.textContent = '⏳ Transcribing…';
+          el.assistantMic.textContent = '…';
           el.assistantStatus.textContent = 'Recording stopped—transcribing and sending…';
           assistantMediaRecorder.stop();
           return;
@@ -1536,20 +1621,26 @@
         assistantVoiceMode = false;
         stopAssistantAudioInput();
         if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-        el.assistantMic.textContent = '🎙️ Speak';
+        el.assistantMic.setAttribute('aria-pressed', 'false');
+        el.assistantMic.title = 'Start voice chat';
+        el.assistantMic.textContent = '🎙️';
         el.assistantStatus.textContent = 'Voice chat বন্ধ হয়েছে।';
         return;
       }
       assistantVoiceMode = true;
+      el.assistantMic.setAttribute('aria-pressed', 'true');
+      el.assistantMic.title = 'Stop voice chat';
       assistantVoiceReplies = true;
       el.assistantSpeakToggle.setAttribute('aria-pressed', 'true');
-      el.assistantSpeakToggle.textContent = '🔊 Read replies: On';
-      el.assistantMic.textContent = '⏹️ Stop & send';
+      el.assistantSpeakToggle.textContent = '🔊';
+      el.assistantMic.textContent = '⏹️';
       startAssistantAudioInput();
     });
     el.assistantMicDevice.addEventListener('change', () => {
       const selected = el.assistantMicDevice.selectedOptions[0]?.textContent || 'Default input';
-      el.assistantStatus.textContent = `Microphone selected: ${selected}. Press Speak to record.`;
+      el.assistantStatus.textContent = /stereo\s*mix|loopback|what\s*u\s*hear/i.test(selected)
+        ? `${selected}: এতে speaker playback ধরা পড়ে; এটি voice mic নয়।`
+        : `Microphone selected: ${selected}. Press Speak to record.`;
     });
     el.assistantMicRefresh.addEventListener('click', async () => {
       el.assistantStatus.textContent = 'Connected microphones খুঁজছি…';
@@ -1562,7 +1653,7 @@
     el.assistantSpeakToggle.addEventListener('click', () => {
       assistantVoiceReplies = !assistantVoiceReplies;
       el.assistantSpeakToggle.setAttribute('aria-pressed', String(assistantVoiceReplies));
-      el.assistantSpeakToggle.textContent = assistantVoiceReplies ? '🔊 Read replies: On' : '🔈 Read replies: Off';
+      el.assistantSpeakToggle.textContent = assistantVoiceReplies ? '🔊' : '◖)))';
       if (!assistantVoiceReplies && 'speechSynthesis' in window) window.speechSynthesis.cancel();
     });
     el.assistantSend.addEventListener('click', () => sendAssistantMessage());

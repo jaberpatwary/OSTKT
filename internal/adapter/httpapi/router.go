@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
 
@@ -20,6 +22,7 @@ import (
 
 type TicketUseCase interface {
 	SearchEmployees(query string, limit int) []domain.Employee
+	ListEmployees() []domain.Employee
 	Create(ctx context.Context, input usecase.CreateTicketInput) (domain.Ticket, bool, error)
 	Complete(ctx context.Context, key string) (usecase.CompleteTicketResult, error)
 	Assign(ctx context.Context, key, assignee string) (domain.Ticket, error)
@@ -129,13 +132,26 @@ func (h *Handler) assistantTranscribe(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "audio must be between 1 byte and 10 MB"})
 		return
 	}
-	transcript, err := h.assistant.Transcribe(c.Request.Context(), header.Filename, file)
+	language := strings.ToLower(strings.TrimSpace(c.PostForm("language")))
+	if language == "" {
+		language = "auto"
+	}
+	if language != "auto" && language != "bn" && language != "en" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "language must be auto, bn, or en"})
+		return
+	}
+	transcript, err := h.assistant.Transcribe(c.Request.Context(), header.Filename, file, language)
 	if err != nil {
 		log.Printf("assistant transcription failed: %v", err)
+		if isAssistantRateLimited(err) {
+			c.Header("Retry-After", "60")
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Voice assistant is busy right now. Please wait a minute and try again."})
+			return
+		}
 		c.JSON(http.StatusBadGateway, gin.H{"error": "speech transcription failed; check Groq limits and try again"})
 		return
 	}
-	if transcript == "" {
+	if !containsSpeechWords(transcript) {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "no speech was detected; please speak louder and try again"})
 		return
 	}
@@ -143,6 +159,15 @@ func (h *Handler) assistantTranscribe(c *gin.Context) {
 		transcript = string([]rune(transcript)[:1200])
 	}
 	c.JSON(http.StatusOK, gin.H{"text": transcript})
+}
+
+func containsSpeechWords(text string) bool {
+	for _, r := range text {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) {
+			return true
+		}
+	}
+	return false
 }
 
 type assistantChatRequest struct {
@@ -168,6 +193,118 @@ func resolveAssistantAssignee(value string) string {
 
 func normalizeAssistantValue(value string) string {
 	return strings.ToLower(strings.Join(strings.Fields(value), " "))
+}
+
+func isAssistantRateLimited(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "HTTP 429")
+}
+
+func relevantAssistantEmployees(messages []groqapi.Message, employees []domain.Employee, limit int) []domain.Employee {
+	if limit <= 0 || len(employees) == 0 {
+		return nil
+	}
+	var queryBuilder strings.Builder
+	for _, message := range messages {
+		if strings.EqualFold(message.Role, "user") {
+			queryBuilder.WriteByte(' ')
+			queryBuilder.WriteString(strings.ToLower(message.Content))
+		}
+	}
+	query := queryBuilder.String()
+	queryTokens := assistantNameTokens(query)
+	if len(queryTokens) == 0 {
+		return nil
+	}
+	type rankedEmployee struct {
+		employee domain.Employee
+		score    float64
+	}
+	ranked := make([]rankedEmployee, 0)
+	for _, employee := range employees {
+		name := strings.TrimSpace(employee.Name)
+		if name == "" {
+			continue
+		}
+		if strings.Contains(query, normalizeAssistantValue(name)) {
+			ranked = append(ranked, rankedEmployee{employee: employee, score: 2})
+			continue
+		}
+		var tokenScores []float64
+		for _, nameToken := range assistantNameTokens(name) {
+			if len([]rune(nameToken)) < 3 || nameToken == "mohd" || nameToken == "md" {
+				continue
+			}
+			best := 0.0
+			for _, queryToken := range queryTokens {
+				if len([]rune(queryToken)) < 3 {
+					continue
+				}
+				if score := assistantTokenSimilarity(nameToken, queryToken); score > best {
+					best = score
+				}
+			}
+			if best >= 0.72 {
+				tokenScores = append(tokenScores, best)
+			}
+		}
+		if len(tokenScores) == 0 {
+			continue
+		}
+		sort.Sort(sort.Reverse(sort.Float64Slice(tokenScores)))
+		score := tokenScores[0]
+		if len(tokenScores) > 1 {
+			score = (tokenScores[0] + tokenScores[1]) / 2
+		}
+		ranked = append(ranked, rankedEmployee{employee: employee, score: score})
+	}
+	sort.SliceStable(ranked, func(i, j int) bool {
+		if ranked[i].score == ranked[j].score {
+			return ranked[i].employee.Name < ranked[j].employee.Name
+		}
+		return ranked[i].score > ranked[j].score
+	})
+	if len(ranked) > limit {
+		ranked = ranked[:limit]
+	}
+	result := make([]domain.Employee, 0, len(ranked))
+	for _, candidate := range ranked {
+		result = append(result, candidate.employee)
+	}
+	return result
+}
+
+func assistantNameTokens(value string) []string {
+	return strings.FieldsFunc(strings.ToLower(value), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
+	})
+}
+
+func assistantTokenSimilarity(left, right string) float64 {
+	leftRunes, rightRunes := []rune(left), []rune(right)
+	maxLen := len(leftRunes)
+	if len(rightRunes) > maxLen {
+		maxLen = len(rightRunes)
+	}
+	if maxLen == 0 {
+		return 0
+	}
+	previous := make([]int, len(rightRunes)+1)
+	for j := range previous {
+		previous[j] = j
+	}
+	for i, leftRune := range leftRunes {
+		current := make([]int, len(rightRunes)+1)
+		current[0] = i + 1
+		for j, rightRune := range rightRunes {
+			cost := 0
+			if leftRune != rightRune {
+				cost = 1
+			}
+			current[j+1] = min(current[j]+1, previous[j+1]+1, previous[j]+cost)
+		}
+		previous = current
+	}
+	return 1 - float64(previous[len(rightRunes)])/float64(maxLen)
 }
 
 func (h *Handler) assistantChat(c *gin.Context) {
@@ -208,9 +345,15 @@ func (h *Handler) assistantChat(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "conversation is too long or does not end with a user message"})
 		return
 	}
-	details, err := h.assistant.ExtractTicket(c.Request.Context(), request.Messages)
+	employeeCandidates := relevantAssistantEmployees(request.Messages, h.tickets.ListEmployees(), 8)
+	details, err := h.assistant.ExtractTicket(c.Request.Context(), request.Messages, employeeCandidates, assistantAssignees)
 	if err != nil {
 		log.Printf("assistant extraction failed: %v", err)
+		if isAssistantRateLimited(err) {
+			c.Header("Retry-After", "60")
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Ticket assistant is busy right now. Please wait a minute and send your message again."})
+			return
+		}
 		c.JSON(http.StatusBadGateway, gin.H{"error": "AI service could not process the request. Check Groq API settings and try again."})
 		return
 	}

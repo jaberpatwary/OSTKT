@@ -103,6 +103,10 @@ func (s *EmployeeStore) Search(query string, limit int) []Employee {
 	return result
 }
 
+func (s *EmployeeStore) All() []Employee {
+	return append([]Employee(nil), s.snapshot()...)
+}
+
 func digitsOnly(value string) string {
 	return strings.Map(func(r rune) rune {
 		if r >= '0' && r <= '9' {

@@ -9,6 +9,12 @@ html.dark .bg-slate-50, html.dark .bg-slate-50\/70 { background-color: #111827 !
 html.dark .bg-slate-100 { background-color: #1e293b !important; }
 html.dark .bg-slate-200 { background-color: #334155 !important; }
 html.dark .bg-blue-50, html.dark .bg-cyan-50, html.dark .bg-sky-50 { background-color: #13233a !important; }
+html.dark #suggestions [role="option"]:hover,
+html.dark #suggestions [role="option"][aria-selected="true"] { background-color: #1e3a5f !important; }
+html.dark #suggestions > li[role="option"] { background-color: #172033 !important; color: #f1f5f9 !important; }
+html.dark #suggestions > li[role="option"]:hover,
+html.dark #suggestions > li[role="option"][aria-selected="true"] { background-color: #1e3a5f !important; }
+html.dark #employeeCard, html.dark #ticketDetails { background-color: #172033 !important; }
 html.dark .bg-amber-50 { background-color: #302716 !important; }
 html.dark .bg-amber-100 { background-color: #443618 !important; }
 html.dark .bg-emerald-50 { background-color: #102d29 !important; }
@@ -41,11 +47,22 @@ html.dark #dashboardSection::-webkit-scrollbar-thumb, html.dark #ticketSection::
 .assistant-messages { scrollbar-width: thin; scrollbar-color: #b8dce8 transparent; }
 .assistant-composer { background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%); }
 .assistant-voice-button:focus-visible, #assistantSpeakToggle:focus-visible { outline: 3px solid rgb(6 182 212 / .35); outline-offset: 2px; }
+.assistant-compose-bar { min-height: 3.5rem; }
+.assistant-icon-button { transition: transform .15s ease, background-color .15s ease, box-shadow .15s ease; }
+.assistant-icon-button:not(:disabled):active { transform: scale(.95); }
+.assistant-panel-fullscreen { position: fixed; inset: 1rem; z-index: 80; display: flex; flex-direction: column; width: auto; max-width: none; max-height: calc(100dvh - 2rem); margin: 0; box-shadow: 0 24px 80px rgb(15 23 42 / .35); }
+.assistant-panel-fullscreen #assistantMessages { flex: 1 1 auto; min-height: 0; max-height: none !important; }
+.assistant-panel-fullscreen .assistant-composer { flex: 0 0 auto; }
+body.assistant-chat-expanded { overflow: hidden; }
 html.dark .assistant-panel { background: linear-gradient(145deg, #172033 0%, #101b2c 100%); }
 html.dark .assistant-composer { background: #172033; }
 @media (prefers-reduced-motion: no-preference) {
   .assistant-avatar { animation: assistant-float 4s ease-in-out infinite; }
   @keyframes assistant-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+}
+@media (max-width: 640px) {
+  .assistant-panel-fullscreen { inset: 0; max-height: 100dvh; border-radius: 0; }
+  .assistant-compose-bar { gap: .35rem; padding: .35rem; }
 }
 
 @media (prefers-reduced-motion: no-preference) {

@@ -147,6 +147,12 @@ func (r *TicketRepository) List(ctx context.Context, filter domain.TicketFilter)
 	if filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)
 	}
+	if !filter.CreatedFrom.IsZero() {
+		query = query.Where("created_at >= ?", filter.CreatedFrom)
+	}
+	if !filter.CreatedUntil.IsZero() {
+		query = query.Where("created_at < ?", filter.CreatedUntil)
+	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err

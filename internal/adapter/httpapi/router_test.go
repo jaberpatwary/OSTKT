@@ -38,6 +38,14 @@ func TestIsAssistantRateLimited(t *testing.T) {
 	}
 }
 
+func TestNormalizeAssistantBanglishSeparatesMisspelledAssignment(t *testing.T) {
+	got := normalizeAssistantBanglish("PC te internet nai assingTowhedul Islam")
+	want := "PC te internet nai assign Towhedul Islam"
+	if got != want {
+		t.Fatalf("normalizeAssistantBanglish() = %q, want %q", got, want)
+	}
+}
+
 func TestRelevantAssistantEmployeesMatchesNameAndBanglishTypos(t *testing.T) {
 	employees := []domain.Employee{
 		{Name: "Sumaiya Akter", EmployeeID: "101"},

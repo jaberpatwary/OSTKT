@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	StatusDone    = "done"
-	StatusPending = "pending"
+	StatusDone       = "done"
+	StatusPending    = "pending"
+	StatusInProgress = "in_progress"
 )
 
 var (
@@ -47,8 +48,37 @@ func (t Ticket) Employee() Employee {
 }
 
 type TicketFilter struct {
-	Status string
-	Limit  int
+	Status       string
+	CreatedFrom  time.Time
+	CreatedUntil time.Time
+	Limit        int
+}
+
+type Task struct {
+	ID          uint
+	Title       string
+	Description string
+	CreatedBy   string
+	AssignedTo  string
+	Priority    string
+	DueDate     string
+	Status      string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type TaskFilter struct {
+	Status   string
+	Assignee string
+	Query    string
+	Limit    int
+}
+
+type TaskRepository interface {
+	Create(ctx context.Context, task *Task) error
+	Get(ctx context.Context, id uint) (Task, error)
+	List(ctx context.Context, filter TaskFilter) ([]Task, int64, error)
+	Update(ctx context.Context, id uint, changes map[string]any) (bool, error)
 }
 
 type TicketRepository interface {

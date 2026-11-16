@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#2563eb" />
+  <meta name="theme-color" content="#17234b" />
   <script>try { if (localStorage.getItem('ost-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (_) {}</script>
   <title>Auto Ticket System</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎫</text></svg>" />
@@ -11,7 +11,7 @@
   <!-- বাংলা ফন্ট -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
   <!-- Tailwind CDN — কোনো build step নেই -->
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
@@ -92,7 +92,8 @@
       * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
   </style>
-  <link rel="stylesheet" href="/theme.css?v=20261115" />
+  <link rel="stylesheet" href="/theme.css?v=20261117-production-polish1" />
+  <link rel="stylesheet" href="/premium.css?v=20261117-assistant-demo-fix1" />
 </head>
 
 <body class="min-h-screen bg-gradient-to-b from-blue-50 via-sky-50/50 to-white bg-fixed text-slate-800 antialiased">
@@ -109,6 +110,56 @@
 
     <!-- ===================== হোম স্ক্রিন ===================== -->
     <section id="homeScreen" class="screen-enter">
+      <nav id="workspaceTabs" class="workspace-tabs" role="tablist" aria-label="Workspace">
+        <button id="ticketModeButton" type="button" class="workspace-tab is-active" role="tab" aria-selected="true" aria-controls="workspaceLayout">🎫 Tickets</button>
+        <button id="taskModeButton" type="button" class="workspace-tab" role="tab" aria-selected="false" aria-controls="taskWorkspace">✓ Tasks</button>
+        <span class="workspace-tabs-caption">Service workspace</span>
+      </nav>
+      <section id="taskWorkspace" class="hidden" aria-labelledby="taskWorkspaceTitle">
+        <header class="task-page-header">
+          <div><p class="task-eyebrow">TEAM EXECUTION</p><h1 id="taskWorkspaceTitle">Task board</h1><p>Plan work, assign an owner, and keep progress visible.</p></div>
+          <div class="task-page-actions">
+            <button id="taskThemeToggle" type="button" class="task-header-button" data-theme-toggle aria-pressed="false">🌙 Dark mode</button>
+            <button id="taskAssistantOpenButton" type="button" class="task-ai-shortcut">✦ Chat or speak a task</button>
+            <button id="taskRefreshButton" type="button" class="premium-secondary-button">↻ Refresh tasks</button>
+          </div>
+        </header>
+        <div class="task-summary-grid" aria-label="Task summary">
+          <article><span>Total tasks</span><strong id="taskTotalCount">0</strong><small>In the selected range</small></article>
+          <article><span>Pending</span><strong id="taskPendingCount">0</strong><small>Waiting to start</small></article>
+          <article><span>In progress</span><strong id="taskInProgressCount">0</strong><small>Currently being worked on</small></article>
+          <article><span>Completed</span><strong id="taskDoneCount">0</strong><small>Marked done</small></article>
+          <article><span>Created today</span><strong id="taskTodayCount">0</strong><small>New work today</small></article>
+        </div>
+        <section class="task-analytics" aria-label="Task analytics">
+          <div class="task-analytics-toolbar"><div><p class="task-eyebrow">WORK ANALYTICS</p><p id="taskAnalyticsHint">Latest 90 days · task activity and ownership</p></div><label class="sr-only" for="taskAnalyticsRange">Task analytics date range</label><select id="taskAnalyticsRange"><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="365">Last 12 months</option><option value="all">All available</option></select></div>
+          <div class="task-analytics-grid">
+            <article class="task-analytics-card"><div><h2>Task status</h2><p>Progress in the selected range</p></div><div id="taskStatusChart" class="task-status-chart" aria-live="polite"></div></article>
+            <article class="task-analytics-card"><div><h2>Active work by owner</h2><p>Pending and in-progress tasks</p></div><div id="taskOwnerChart" class="task-breakdown-chart" aria-live="polite"></div></article>
+            <article class="task-analytics-card task-trend-card"><div><h2>Work created over time</h2><p>Monthly tasks · latest 6 months</p></div><div id="taskTrendChart" class="task-trend-chart" aria-live="polite"></div></article>
+          </div>
+        </section>
+        <div class="task-workspace-grid">
+          <form id="taskForm" class="task-form-card">
+            <div class="task-form-heading"><span class="task-form-icon">＋</span><div><h2 id="taskFormTitle">Create a task</h2><p>Capture a piece of work and give it an owner.</p></div></div>
+            <label for="taskCreatedByInput">Given by <span>*</span></label>
+            <select id="taskCreatedByInput" required><option value="">Select who gave this task</option><option>Rupok Kumar Roy</option><option>Towhedul Islam</option><option>Md. Imam Hossan Chowdhury</option><option>Muhammad Fokhrul Hasan</option><option>Md. Tanvir Ahamed Sarkar</option><option>Md. Fahad Hossen</option><option>Mabubul Alam Patwary</option></select>
+            <label for="taskDescriptionInput">Task details <span>*</span></label>
+            <textarea id="taskDescriptionInput" rows="5" maxlength="2000" placeholder="Describe the work to do…" required></textarea>
+            <label for="taskAssigneeInput">Assign to <small>Optional</small></label>
+            <select id="taskAssigneeInput"><option value="">Unassigned</option><option>Rupok Kumar Roy</option><option>Towhedul Islam</option><option>Md. Imam Hossan Chowdhury</option><option>Muhammad Fokhrul Hasan</option><option>Md. Tanvir Ahamed Sarkar</option><option>Md. Fahad Hossen</option><option>Mabubul Alam Patwary</option></select>
+            <p id="taskFormError" class="task-form-error hidden" role="alert"></p>
+            <div class="task-form-actions"><button id="taskSubmitButton" type="submit" class="task-primary-button">Create task</button><button id="taskCancelEditButton" type="button" class="premium-secondary-button hidden">Cancel edit</button></div>
+          </form>
+          <section class="task-list-card" aria-labelledby="taskListTitle">
+            <div class="task-list-header"><div><p class="task-eyebrow">WORK QUEUE</p><h2 id="taskListTitle">Pending tasks</h2><p id="taskListSummary" aria-live="polite">Loading pending tasks…</p></div><div class="task-filters"><label class="sr-only" for="taskSearchInput">Search pending tasks</label><input id="taskSearchInput" type="search" placeholder="Search pending task details or owner…" /></div></div>
+            <div id="taskList" class="task-list" aria-live="polite"></div>
+            <div id="taskEmptyState" class="task-empty-state hidden"><span>✓</span><h3>No pending tasks found</h3><p>New pending tasks will appear here.</p></div>
+            <p id="taskLoadError" class="task-form-error hidden" role="alert"></p>
+          </section>
+        </div>
+        <div id="taskAssistantDock" class="task-assistant-dock" aria-label="Task chat and voice assistant"></div>
+      </section>
       <div id="workspaceLayout" class="grid grid-cols-1 items-start gap-5 xl:grid-cols-3 2xl:gap-6">
       <section id="dashboardSection" aria-labelledby="dashboardTitle" class="order-1 w-full rounded-[2rem] border border-slate-200 bg-slate-50 p-4 shadow-2xl shadow-slate-300/40 sm:p-5 xl:col-span-2 xl:col-start-1 2xl:p-7">
         <header class="flex flex-wrap items-center justify-between gap-4">
@@ -118,7 +169,7 @@
             <p class="mt-1 text-sm text-slate-500">Support load, issue trends, resolution progress এবং team activity</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <button id="themeToggle" type="button" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50" aria-pressed="false">🌙 Dark mode</button>
+            <button id="themeToggle" type="button" data-theme-toggle class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50" aria-pressed="false">🌙 Dark mode</button>
             <span id="dashboardUpdated" class="mr-1 text-xs text-slate-400">লোড হচ্ছে…</span>
             <button id="dashboardRefresh" type="button" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60">↻ Refresh</button>
             <a href="/admin" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-700">Manage tickets ↗</a>
@@ -150,6 +201,19 @@
           </article>
         </div>
 
+        <section class="mt-4 grid gap-4 xl:grid-cols-3" aria-label="Combined ticket and task queue">
+          <article class="combined-pending-ticket rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm xl:col-span-1">
+            <p class="text-xs font-bold uppercase tracking-wider text-amber-700">Pending tickets</p>
+            <p id="combinedPendingTicketCount" class="mt-2 text-4xl font-extrabold text-slate-900">—</p>
+            <p class="mt-1 text-sm text-slate-500">Support requests waiting for resolution</p>
+          </article>
+          <article class="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm xl:col-span-2">
+            <div class="flex flex-wrap items-center justify-between gap-2"><div><p class="text-xs font-bold uppercase tracking-wider text-violet-700">Pending tasks</p><p class="text-sm text-slate-500">Open team work, together with ticket status</p></div><strong id="combinedPendingTaskCount" class="rounded-full bg-violet-100 px-3 py-1 text-lg text-violet-800">—</strong></div>
+            <div id="combinedPendingTaskList" class="mt-3 grid gap-2"></div>
+            <p id="combinedPendingTaskEmpty" class="hidden py-3 text-sm text-slate-400">No pending tasks.</p>
+          </article>
+        </section>
+
         <div class="mt-4 grid gap-4 2xl:grid-cols-6">
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-2"><div class="flex items-start justify-between"><div><h3 class="font-bold text-slate-800">Support status</h3><p class="text-xs text-slate-400">Resolved vs open tickets</p></div><span id="dashCompletionRate" class="rounded-full bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700">—</span></div><div class="mt-3 flex items-center justify-center gap-4"><svg id="statusDonut" viewBox="0 0 160 160" class="h-40 w-40 -rotate-90" role="img" aria-label="Ticket status distribution"><circle cx="80" cy="80" r="58" fill="none" stroke="#e2e8f0" stroke-width="22"/><circle id="donutDone" cx="80" cy="80" r="58" fill="none" stroke="#18a66a" stroke-width="22" stroke-dasharray="0 365"/><circle id="donutPending" cx="80" cy="80" r="58" fill="none" stroke="#f4ad28" stroke-width="22" stroke-dasharray="0 365" stroke-dashoffset="-365"/></svg><div class="space-y-3 text-xs"><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Resolved <strong id="donutDoneLabel" class="ml-1 text-slate-800">—</strong></p><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-amber-400"></span>Open <strong id="donutPendingLabel" class="ml-1 text-slate-800">—</strong></p><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-slate-200"></span>Total <strong id="donutTotalLabel" class="ml-1 text-slate-800">—</strong></p></div></div><div class="h-2 overflow-hidden rounded-full bg-slate-100"><div id="dashboardProgress" class="h-full rounded-full bg-emerald-500 transition-all" style="width:0%"></div></div></section>
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-2"><div class="flex flex-wrap items-start justify-between gap-2"><div><h3 class="font-bold text-slate-800">Tickets by issue type</h3><p class="text-xs text-slate-400">Open and resolved volume</p></div><div class="flex gap-2 text-[10px]"><span class="text-emerald-600">● Resolved</span><span class="text-cyan-600">● Open</span></div></div><div id="issueTypeChart" class="mt-4 space-y-3" aria-label="Ticket issue type chart"></div></section>
@@ -169,7 +233,11 @@
       </header>
 
       <!-- নাম ইনপুট + অটোকমপ্লিট -->
-      <div class="relative mt-8">
+      <div class="employee-search-heading" aria-hidden="true">
+        <span>EMPLOYEE DIRECTORY</span>
+        <span class="employee-search-live"><i></i> INSTANT LOOKUP</span>
+      </div>
+      <div id="employeeSearchShell" class="employee-search-shell relative mt-2">
         <label for="nameInput" class="sr-only">কর্মীর নাম</label>
         <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-xl" aria-hidden="true">🔍</span>
         <input id="nameInput" name="employee-directory-query" type="search" autocomplete="off" autocapitalize="words" spellcheck="false"
@@ -252,7 +320,11 @@
         <ul id="pendingList" class="divide-y divide-slate-100 border-t border-amber-100"></ul>
       </details>
 
-      <section aria-labelledby="ticketAssistantTitle" class="assistant-panel mt-6 overflow-hidden rounded-3xl border border-cyan-100 bg-white shadow-xl shadow-cyan-900/10">
+      <section id="assistantDemo" class="assistant-demo" aria-label="Chat example">
+        <div class="assistant-demo-heading"><span aria-hidden="true">✦</span><div><p>CHAT DEMO</p><strong id="assistantDemoFlow">Employee name → problem → assign by name</strong></div></div>
+        <div class="assistant-demo-example"><p id="assistantDemoMessage">Sumaiya Islam-er laptop-e internet nei. Assign to Rupok Kumar Roy.</p><button id="assistantDemoUse" type="button">Try this message <span aria-hidden="true">↗</span></button></div>
+      </section>
+      <section id="assistantPanel" aria-labelledby="ticketAssistantTitle" class="assistant-panel mt-6 overflow-hidden rounded-3xl border border-cyan-100 bg-white shadow-xl shadow-cyan-900/10">
         <header class="flex items-center justify-between gap-3 border-b border-cyan-100 bg-gradient-to-r from-cyan-50 via-sky-50 to-blue-50 px-4 py-4 sm:px-5">
           <div class="flex min-w-0 items-center gap-3">
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-600 to-blue-600 text-xl text-white shadow-md" aria-hidden="true">✦</span>
@@ -268,7 +340,7 @@
         </div>
 
           <div class="assistant-composer border-t border-slate-100 bg-white p-4 sm:p-5">
-          <p class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Try an example</p>
+          <p class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">More examples</p>
           <div id="assistantExamples" class="mb-3 hidden flex-wrap gap-2">
             <button type="button" data-assistant-prompt="Sumaiya-এর laptop-এ network সমস্যা হচ্ছে, assign Rupok-কে" class="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-left text-[11px] text-slate-600 transition hover:border-cyan-300 hover:bg-cyan-50">Network সমস্যা assign করুন</button>
             <button type="button" data-assistant-prompt="Towhedul Islam-এর জন্য printer কাজ করছে না ticket করুন" class="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-left text-[11px] text-slate-600 transition hover:border-cyan-300 hover:bg-cyan-50">Printer issue ticket</button>
@@ -276,7 +348,7 @@
           <label for="assistantInput" class="sr-only">Ticket assistant-কে message লিখুন</label>
           <div class="assistant-compose-bar flex items-end gap-2 rounded-full border border-slate-200 bg-white p-2 shadow-sm focus-within:border-cyan-400 focus-within:ring-4 focus-within:ring-cyan-500/10">
             <button id="assistantExamplesToggle" type="button" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-2xl text-slate-500 hover:bg-slate-100" aria-label="Show examples" aria-expanded="false" title="Show examples">＋</button>
-            <textarea id="assistantInput" rows="1" maxlength="1200" placeholder="Ask Ticket Assistant…" class="max-h-28 min-h-10 flex-1 resize-y border-0 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-slate-400" aria-describedby="assistantStatus"></textarea>
+            <textarea id="assistantInput" rows="1" maxlength="1200" placeholder="Ask Ticket Assistant…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="max-h-28 min-h-10 flex-1 resize-y border-0 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-slate-400" aria-describedby="assistantStatus"></textarea>
             <button id="assistantSend" type="button" disabled title="AI service সংযোগ হলে চালু হবে" class="assistant-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-300 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" aria-label="Send message">↑</button>
           </div>
           <div class="mt-2 flex items-center justify-between gap-2">
@@ -364,7 +436,21 @@
     const $ = (id) => document.getElementById(id);
     const el = {
       homeScreen: $('homeScreen'), resultScreen: $('resultScreen'),
+      workspaceTabs: $('workspaceTabs'), ticketModeButton: $('ticketModeButton'), taskModeButton: $('taskModeButton'),
+      workspaceLayout: $('workspaceLayout'), taskWorkspace: $('taskWorkspace'), taskForm: $('taskForm'),
+      taskDescriptionInput: $('taskDescriptionInput'), taskCreatedByInput: $('taskCreatedByInput'), taskAssigneeInput: $('taskAssigneeInput'), taskSubmitButton: $('taskSubmitButton'),
+      taskAssistantDock: $('taskAssistantDock'), assistantDemo: $('assistantDemo'), assistantPanel: $('assistantPanel'), assistantTitle: $('ticketAssistantTitle'),
+      assistantDemoFlow: $('assistantDemoFlow'), assistantDemoMessage: $('assistantDemoMessage'), assistantDemoUse: $('assistantDemoUse'),
+      assistantSubtitle: $('ticketAssistantTitle').parentElement.querySelector('p'),
+      taskFormTitle: $('taskFormTitle'), taskCancelEditButton: $('taskCancelEditButton'), taskFormError: $('taskFormError'),
+      taskSearchInput: $('taskSearchInput'), taskAnalyticsRange: $('taskAnalyticsRange'), taskRefreshButton: $('taskRefreshButton'),
+      taskAssistantOpenButton: $('taskAssistantOpenButton'),
+      taskList: $('taskList'), taskListSummary: $('taskListSummary'), taskEmptyState: $('taskEmptyState'), taskLoadError: $('taskLoadError'),
+      taskTotalCount: $('taskTotalCount'), taskPendingCount: $('taskPendingCount'), taskInProgressCount: $('taskInProgressCount'), taskDoneCount: $('taskDoneCount'), taskTodayCount: $('taskTodayCount'),
+      taskAnalyticsHint: $('taskAnalyticsHint'), taskStatusChart: $('taskStatusChart'), taskOwnerChart: $('taskOwnerChart'), taskTrendChart: $('taskTrendChart'),
       dashboardSection: $('dashboardSection'), ticketSection: $('ticketSection'),
+      combinedPendingTicketCount: $('combinedPendingTicketCount'), combinedPendingTaskCount: $('combinedPendingTaskCount'),
+      combinedPendingTaskList: $('combinedPendingTaskList'), combinedPendingTaskEmpty: $('combinedPendingTaskEmpty'),
       nameInput: $('nameInput'), clearBtn: $('clearBtn'), suggestions: $('suggestions'), hint: $('hint'),
       employeeCard: $('employeeCard'), cardName: $('cardName'), cardEmpId: $('cardEmpId'), cardDept: $('cardDept'),
       cardEmail: $('cardEmail'), cardPhone: $('cardPhone'),
@@ -396,6 +482,37 @@
       printBtn: $('printBtn'), convertDoneBtn: $('convertDoneBtn'), newTicketBtn: $('newTicketBtn'),
       toastBox: $('toastBox'), toastText: $('toastText'), toastIcon: $('toastIcon'),
     };
+    const taskLayout = document.createElement('div');
+    taskLayout.className = 'task-workspace-layout';
+    const taskDashboard = document.createElement('section');
+    taskDashboard.className = 'task-dashboard-section';
+    taskDashboard.setAttribute('aria-label', 'Task operations dashboard');
+    const taskEntry = document.createElement('section');
+    taskEntry.className = 'task-entry-section';
+    taskEntry.setAttribute('aria-labelledby', 'taskEntryTitle');
+    const taskEntryHeader = document.createElement('header');
+    taskEntryHeader.className = 'task-entry-header';
+    const taskEntryLogo = document.createElement('span');
+    taskEntryLogo.className = 'task-entry-logo';
+    taskEntryLogo.setAttribute('aria-hidden', 'true');
+    taskEntryLogo.textContent = '✓';
+    const taskEntryTitle = document.createElement('h2');
+    taskEntryTitle.id = 'taskEntryTitle';
+    taskEntryTitle.textContent = 'Task Management';
+    const taskEntryDescription = document.createElement('p');
+    taskEntryDescription.textContent = 'Create and assign team work';
+    taskEntryHeader.append(taskEntryLogo, taskEntryTitle, taskEntryDescription);
+    const taskPageHeader = el.taskWorkspace.querySelector(':scope > .task-page-header');
+    const taskSummary = el.taskWorkspace.querySelector(':scope > .task-summary-grid');
+    const taskAnalytics = el.taskWorkspace.querySelector(':scope > .task-analytics');
+    const taskListCard = el.taskList.closest('.task-list-card');
+    taskDashboard.append(taskPageHeader, taskSummary, taskAnalytics, taskListCard);
+    taskEntry.append(taskEntryHeader, el.taskForm, el.taskAssistantDock);
+    taskLayout.append(taskDashboard, taskEntry);
+    el.taskWorkspace.replaceChildren(taskLayout);
+    const assistantPromptDefaults = [...document.querySelectorAll('[data-assistant-prompt]')].map((button) => ({ prompt: button.dataset.assistantPrompt, label: button.textContent }));
+    const assistantMicControls = el.assistantMic.parentElement;
+    assistantMicControls.before(el.assistantEmployeeOptions, el.assistantAssigneeOptions, el.assistantSelectedPerson);
     el.assistantMic.disabled = !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder || !window.AudioContext;
     if (el.assistantMic.disabled) el.assistantMic.title = 'Microphone recording is not supported in this browser';
     const assistantComposerRow = el.assistantInput.parentElement;
@@ -424,6 +541,9 @@
     };
     let debounceTimer = null;
     let dashboardTickets = [];
+    let taskEntries = [];
+    let editingTaskId = null;
+    let taskSearchTimer = null;
     let activeIssueFilter = '';
     const assistantConversation = [];
     let assistantVoiceReplies = false;
@@ -435,11 +555,14 @@
     let assistantVoiceCancelled = false;
     let assistantManualStop = false;
     let assistantEnabled = false;
+    let assistantTaskMode = false;
+    let assistantRequestActive = false;
     let assistantSelectedEmployeeID = '';
     let assistantSelectedEmployeeName = '';
     let assistantConversationEmployeeID = '';
     let assistantSearchSequence = 0;
     let assistantSearchTimer = null;
+    let assistantSuggestionIndex = 0;
     const assistantAssignees = [
       'Rupok Kumar Roy', 'Towhedul Islam', 'Md. Imam Hossan Chowdhury',
       'Muhammad Fokhrul Hasan', 'Md. Tanvir Ahamed Sarkar', 'Md. Fahad Hossen',
@@ -497,6 +620,18 @@
       el.assistantMessages.scrollTop = el.assistantMessages.scrollHeight;
     }
 
+    function appendAssistantTask(task) {
+      const card = document.createElement('article');
+      card.className = 'ml-auto max-w-[95%] rounded-2xl border border-violet-200 bg-violet-50 p-3 text-xs';
+      const reference = document.createElement('p'); reference.className = 'font-bold text-violet-800'; reference.textContent = 'Task TSK-' + String(task.id).padStart(6, '0');
+      const details = document.createElement('p'); details.className = 'mt-1 text-slate-600'; details.textContent = task.description || '';
+      const creator = document.createElement('p'); creator.className = 'mt-1 text-slate-600'; creator.textContent = 'Given by: ' + (task.created_by || '—');
+      const owner = document.createElement('p'); owner.className = 'mt-1 text-slate-600'; owner.textContent = 'Assigned to: ' + (task.assigned_to || 'Unassigned');
+      card.append(reference, details, creator, owner);
+      el.assistantMessages.append(card);
+      el.assistantMessages.scrollTop = el.assistantMessages.scrollHeight;
+    }
+
     function appendAssistantCandidates(matches) {
       if (!Array.isArray(matches) || !matches.length) return;
       const group = document.createElement('div'); group.className = 'flex flex-wrap gap-2';
@@ -536,37 +671,102 @@
       if (wasHidden) requestAnimationFrame(() => node.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
     }
 
-    function assistantEmployeeQuery(text) {
-      let query = text.trim();
-      query = query.replace(/^(?:(?:please|create|make|open|submit|new|i need)\s+)*(?:a\s+)?(?:ticket\s+)?(?:for\s+)?/i, '');
-      query = query.replace(/^(?:for|employee|user|name)\s*[:\-]?\s*/i, '');
-      const marker = query.search(/\b(?:problem|issue|pc|computer|laptop|network|printer|internet|email|password|login|broken|assign(?:ed|ee)?|assing)\b|(?:\s+(?:er|এর|for)\s+)|(?:এর\s+জন্য)|(?:[-–—]এর)\b/i);
-      if (marker >= 0) query = query.slice(0, marker);
-      // Chat messages may start with Bengali/English request words before the employee name.
-      const filler = new Set([
-        'a', 'an', 'the', 'please', 'create', 'make', 'open', 'submit', 'new', 'need', 'want', 'ticket', 'for', 'employee', 'user', 'name', 'problem', 'issue', 'pc', 'computer', 'laptop', 'network', 'printer', 'internet', 'email', 'password', 'login', 'broken', 'my', 'amar', 'amr', 'userer', 'kormir', 'kormochari', 'somossa', 'somossar',
-        'আমার', 'আমারটা', 'একটা', 'টিকিট', 'টিকেট', 'করুন', 'করতে', 'চাই', 'দিয়ে', 'জন্য', 'কর্মী', 'কর্মীর', 'নাম', 'সমস্যা', 'সমস্যাটা', 'সমস্যার', 'হচ্ছে', 'হয়েছে', 'নষ্ট', 'লিখুন', 'এর', 'এটা', 'একটি', 'দরকার', 'আমাকে',
-      ]);
-      return query.replace(/(?:'s|’s)$/i, '').trim().replace(/[.,!?;:]+$/g, '').split(/\s+/)
-        .filter((word) => !filler.has(word.toLocaleLowerCase()))
-        .join(' ').trim();
+    function setAssistantSuggestionActive(container, index = 0) {
+      const options = [...container.querySelectorAll('button[role="option"]')];
+      if (!options.length) { assistantSuggestionIndex = 0; return; }
+      assistantSuggestionIndex = (index + options.length) % options.length;
+      options.forEach((option, i) => {
+        const active = i === assistantSuggestionIndex;
+        option.setAttribute('aria-selected', String(active));
+        option.classList.toggle('bg-violet-50', active && container === el.assistantAssigneeOptions);
+        option.classList.toggle('text-violet-900', active && container === el.assistantAssigneeOptions);
+        option.classList.toggle('bg-cyan-50', active && container === el.assistantEmployeeOptions);
+        option.classList.toggle('text-cyan-900', active && container === el.assistantEmployeeOptions);
+      });
+      options[assistantSuggestionIndex].scrollIntoView({ block: 'nearest' });
     }
 
+    function assistantEmployeeNameSpan(text) {
+      const prefix = /^(?:(?:please|create|make|open|submit|new|i need|i want)\s+)*(?:a\s+)?(?:ticket\s+)?(?:for\s+)?/i.exec(text);
+      let start = prefix ? prefix[0].length : 0;
+      // Also support problem-first messages such as "PC issue for Tajdin".
+      const cue = /\b(?:for|employee|user|requester|person|name|given by|created by|requested by|from)\s+/ig;
+      let cueMatch;
+      while ((cueMatch = cue.exec(text))) start = cueMatch.index + cueMatch[0].length;
+      if (start === 0 && /^(?:my\s+)?(?:pc|computer|laptop|network|printer|internet|email|password|login|wifi|keyboard|monitor|mouse)\b/i.test(text)) {
+        const issueEnd = /\b(?:problem|issue|not working|broken|is down|doesn.t work)\b/i.exec(text);
+        if (issueEnd) start = issueEnd.index + issueEnd[0].length;
+      }
+      const rest = text.slice(start);
+      const markers = [/\s+(?:er|ar|r|for)\s+/i, /\b(?:problem|issue|pc|computer|laptop|network|printer|internet|email|password|login|broken|wifi|keyboard|monitor|mouse|software|hardware|somossa|assign(?:ed|ee)?|assing)\b/i, /['’]s\b/i, /[,.!?;:]/];
+      let end = rest.length;
+      markers.forEach((marker) => { const found = marker.exec(rest); if (found && found.index < end) end = found.index; });
+      const raw = rest.slice(0, end).trim();
+      const left = rest.slice(0, end).search(/\S|$/);
+      const query = raw.replace(/\b(?:bhaiya|bhai|vaiya|vai|apu|apa|sir|madam|mr|ms|is|not|working|down|doesnt|doesn.t|pc|computer|laptop|network|printer|internet|email|password|login|wifi|issue|problem|broken)\b/gi, '').replace(/\bmd\.?\b/gi, '').replace(/\s+/g, ' ').trim();
+      return { query, start: start + left, end: start + left + raw.length };
+    }
+
+    function assistantEmployeeQuery(text) { return assistantEmployeeNameSpan(text).query; }
+
+    function insertAssistantEmployeeName(employee) {
+      const text = el.assistantInput.value;
+      const span = assistantEmployeeNameSpan(text);
+      const name = employee.Name || employee.name || '';
+      if (!name) return false;
+      el.assistantInput.value = text.slice(0, span.start) + name + text.slice(span.end);
+      if (assistantTaskMode) clearAssistantEmployee();
+      else setAssistantEmployee(employee);
+      el.assistantInput.focus();
+      hide(el.assistantEmployeeOptions);
+      updateAssistantSuggestions();
+      return true;
+    }
+
+    function insertAssistantAssigneeName(name) {
+      const text = el.assistantInput.value;
+      const match = /\b(?:assign(?:ed|ee)?|assing)\b(?:\s+(?:to|by))?\s*(.*)$/i.exec(text);
+      if (!match) return false;
+      const directive = /^(?:assign(?:ed|ee)?|assing)\b(?:\s+(?:to|by))?\s*/i.exec(match[0])[0];
+      el.assistantInput.value = text.slice(0, match.index) + directive + name;
+      el.assistantInput.focus();
+      hide(el.assistantAssigneeOptions);
+      return true;
+    }
+
+    function autoCorrectAssistantAssignee(text, typedValue) {
+      if (!/\s$/.test(typedValue)) return false;
+      const match = /\b(?:assign(?:ed|ee)?|assing)\b(?:\s+(?:to|by))?\s*(.*)$/i.exec(text);
+      if (!match || !match[1].trim()) return false;
+      const typedName = match[1].trim().toLocaleLowerCase();
+      const aliases = { jaber: 'Mabubul Alam Patwary', 'jaber patwary': 'Mabubul Alam Patwary' };
+      const canonical = aliases[typedName] || assistantAssignees.find((name) => name.toLocaleLowerCase() === typedName);
+      if (!canonical || match[1].trim() === canonical) return false;
+      const directive = /^(?:assign(?:ed|ee)?|assing)\b(?:\s+(?:to|by))?\s*/i.exec(match[0])[0];
+      el.assistantInput.value = text.slice(0, match.index) + directive + canonical + ' ';
+      el.assistantInput.setSelectionRange(el.assistantInput.value.length, el.assistantInput.value.length);
+      return true;
+    }
     function renderAssistantAssignees(query) {
       const q = query.toLocaleLowerCase();
-      const matches = assistantAssignees.filter((name) => !q || name.toLocaleLowerCase().includes(q));
+      const aliases = { jaber: 'Mabubul Alam Patwary', 'jaber patwary': 'Mabubul Alam Patwary' };
+      const matches = [...new Set(assistantAssignees.filter((name) => !q || name.toLocaleLowerCase().includes(q) || Object.entries(aliases).some(([alias, canonical]) => canonical === name && alias.includes(q))).concat(Object.entries(aliases).filter(([alias]) => q && alias.includes(q)).map(([, canonical]) => canonical)))];
       el.assistantEmployeeOptions.classList.add('hidden');
       el.assistantAssigneeOptions.replaceChildren(...matches.map((name) => {
         const option = document.createElement('button'); option.type = 'button'; option.setAttribute('role', 'option');
         option.className = 'block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-violet-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-500';
         option.textContent = `👤 ${name}`;
         option.addEventListener('click', () => {
+          if (el.assistantInput.value.trim() && insertAssistantAssigneeName(name)) return;
           hide(el.assistantAssigneeOptions);
           sendAssistantMessage(`Assignee নির্বাচন: ${name}`, name);
         });
         return option;
       }));
-      if (matches.length) revealAssistantOptions(el.assistantAssigneeOptions);
+      if (matches.length) {
+        revealAssistantOptions(el.assistantAssigneeOptions);
+        setAssistantSuggestionActive(el.assistantAssigneeOptions, 0);
+      }
       else hide(el.assistantAssigneeOptions);
     }
 
@@ -601,6 +801,28 @@
             revealAssistantOptions(el.assistantEmployeeOptions);
             return;
           }
+          const employeeSpan = assistantEmployeeNameSpan(text);
+          const hasFollowingText = text.slice(employeeSpan.end).trim().length > 0;
+          const exactMatch = matches.find((employee) => (employee.Name || '').toLocaleLowerCase() === employeeSpan.query.toLocaleLowerCase());
+          if (hasFollowingText && matches.length === 1) {
+            const employee = matches[0];
+            const current = el.assistantInput.value;
+            const currentSpan = assistantEmployeeNameSpan(current);
+            el.assistantInput.value = current.slice(0, currentSpan.start) + (employee.Name || '') + current.slice(currentSpan.end);
+            if (assistantTaskMode) clearAssistantEmployee();
+            else setAssistantEmployee(employee);
+            hide(el.assistantEmployeeOptions);
+            return;
+          }
+          if (exactMatch && /\s$/.test(text)) {
+            const current = el.assistantInput.value;
+            const currentSpan = assistantEmployeeNameSpan(current);
+            el.assistantInput.value = current.slice(0, currentSpan.start) + exactMatch.Name + current.slice(currentSpan.end);
+            if (assistantTaskMode) clearAssistantEmployee();
+            else setAssistantEmployee(exactMatch);
+            hide(el.assistantEmployeeOptions);
+            return;
+          }
           el.assistantEmployeeOptions.replaceChildren(...matches.map((employee) => {
             const option = document.createElement('button'); option.type = 'button'; option.setAttribute('role', 'option');
             option.className = 'block w-full rounded-lg px-3 py-2 text-left hover:bg-cyan-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500';
@@ -608,12 +830,14 @@
             const meta = document.createElement('span'); meta.className = 'mt-0.5 block text-[10px] text-slate-500'; meta.textContent = `ID ${employee.EmployeeID || '—'} · ${employee.Department || '—'}`;
             option.append(name, meta);
             option.addEventListener('click', () => {
+              if (el.assistantInput.value.trim()) { insertAssistantEmployeeName(employee); return; }
               setAssistantEmployee(employee);
               sendAssistantMessage(`কর্মী নির্বাচন: ${employee.Name} (ID ${employee.EmployeeID})`);
             });
             return option;
           }));
           revealAssistantOptions(el.assistantEmployeeOptions);
+          setAssistantSuggestionActive(el.assistantEmployeeOptions, 0);
         } catch (_) {
           if (sequence === assistantSearchSequence) {
             el.assistantEmployeeOptions.textContent = 'কর্মীর নাম খোঁজা যাচ্ছে না। আবার চেষ্টা করুন।';
@@ -635,8 +859,8 @@
         ? 'assistant-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan-700 text-lg font-bold text-white hover:bg-cyan-800 disabled:cursor-wait disabled:opacity-60'
         : 'assistant-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-300 text-lg font-bold text-white';
       el.assistantStatus.textContent = assistantEnabled
-        ? 'AI চালু আছে · শুধু Pending ticket তৈরি হবে'
-        : 'AI service server environment-এ সেট হলে chat চালু হবে';
+        ? (assistantTaskMode ? 'AI ready · create tasks by chat or voice.' : 'AI ready · create pending tickets by chat or voice.')
+        : 'AI service is not configured yet.';
       el.assistantConnectionBadge.textContent = assistantEnabled ? 'AI connected' : 'AI সংযোগ নেই';
       el.assistantConnectionBadge.className = assistantEnabled
         ? 'shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700'
@@ -647,8 +871,10 @@
 
     async function sendAssistantMessage(messageText, selectedAssignee = '', display = null) {
       if (!assistantEnabled || el.assistantSend.disabled) return;
+      const taskMode = assistantTaskMode;
       const content = String(messageText || el.assistantInput.value).trim();
       if (!content || content.length > 1200) return;
+      assistantRequestActive = true;
       if (display?.conversationMessage) {
         display.conversationMessage.content = content;
         if (display.bubble) display.bubble.textContent = content;
@@ -658,7 +884,7 @@
       }
       if (assistantConversation.length > 12) assistantConversation.splice(0, assistantConversation.length - 12);
       el.assistantInput.value = '';
-      const selectedEmployeeID = assistantSelectedEmployeeID;
+      const selectedEmployeeID = taskMode ? '' : assistantSelectedEmployeeID;
       const selectedEmployeeName = assistantSelectedEmployeeName;
       if (selectedEmployeeID && selectedEmployeeName) {
         assistantConversationEmployeeID = selectedEmployeeID;
@@ -671,17 +897,32 @@
       el.assistantSend.textContent = '…';
       el.assistantStatus.textContent = 'কর্মী ও সমস্যার তথ্য দেখা হচ্ছে…';
       try {
-        const { ok, status, data } = await api('/api/assistant', {
-          method: 'POST',
-          body: JSON.stringify({ messages: assistantConversation, selected_employee_id: selectedEmployeeID || assistantConversationEmployeeID, selected_assignee: selectedAssignee }),
-        });
+        let result;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          result = await api(taskMode ? '/api/assistant/tasks' : '/api/assistant', {
+            method: 'POST',
+            body: JSON.stringify({ messages: assistantConversation, selected_employee_id: selectedEmployeeID || assistantConversationEmployeeID, selected_assignee: selectedAssignee }),
+          });
+          if (result.ok || result.status !== 502 || attempt > 0) break;
+          el.assistantStatus.textContent = 'AI is temporarily busy; retrying once…';
+          await sleep(700);
+        }
+        const { ok, status, data } = result;
         if (!ok) throw new Error(data.error || `Chat request failed (${status})`);
         const reply = data.reply || 'আর কোনো তথ্য লাগলে লিখুন।';
         clearAssistantEmployee();
         appendAssistantMessage('assistant', reply);
         if (assistantVoiceMode) await speakAssistantReply(reply);
         else if (assistantVoiceReplies) speakAssistantReply(reply);
-        if (data.created && data.ticket) {
+        if (data.created && data.task && taskMode) {
+          assistantVoiceMode = false;
+          el.assistantMic.textContent = '🎙️';
+          appendAssistantTask(data.task);
+          assistantConversation.length = 0;
+          assistantConversationEmployeeID = '';
+          loadTaskBoard();
+          el.assistantStatus.textContent = 'Task created · keep chatting to add another task.';
+        } else if (data.created && data.ticket && !taskMode) {
           assistantVoiceMode = false;
           el.assistantMic.textContent = '🎙️';
           appendAssistantTicket(data.ticket);
@@ -701,10 +942,13 @@
           }
         }
       } catch (error) {
+        if (!el.assistantInput.value.trim()) el.assistantInput.value = content;
+        updateAssistantSuggestions();
         if (assistantVoiceMode) await speakAssistantReply(error.message || 'Chat service-এ সমস্যা হয়েছে। আবার বলুন।');
         appendAssistantMessage('assistant', error.message || 'Chat service-এ সংযোগ করা যায়নি।');
         el.assistantStatus.textContent = 'আবার চেষ্টা করুন বা API configuration যাচাই করুন';
       } finally {
+        assistantRequestActive = false;
         el.assistantSend.textContent = '↑';
         el.assistantSend.disabled = !assistantEnabled;
       }
@@ -1115,6 +1359,30 @@
       renderRecentTickets(ranged);
     }
 
+    function renderCombinedPendingQueue(tasks) {
+      const pendingTasks = Array.isArray(tasks) ? tasks : [];
+      el.combinedPendingTaskCount.textContent = toBnDigits(pendingTasks.length);
+      el.combinedPendingTaskList.replaceChildren(...pendingTasks.map((task) => {
+        const item = document.createElement('article');
+        item.className = 'flex min-w-0 items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4';
+        const details = document.createElement('div'); details.className = 'min-w-0 flex-1';
+        const description = document.createElement('p'); description.className = 'whitespace-pre-wrap break-words text-sm leading-5 text-slate-700'; description.textContent = task.description || 'No additional details.';
+        const meta = document.createElement('div'); meta.className = 'mt-3 grid gap-1 text-xs text-slate-500';
+        const creator = document.createElement('span'); creator.textContent = `Given by: ${task.created_by || 'Unknown'}`;
+        const owner = document.createElement('span'); owner.textContent = `Assigned to: ${task.assigned_to || 'Unassigned'}`;
+        meta.append(creator, owner); details.append(description, meta);
+        const done = document.createElement('button'); done.type = 'button'; done.className = 'shrink-0 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50'; done.textContent = 'Mark done';
+        done.addEventListener('click', async () => {
+          done.disabled = true; done.textContent = 'Saving…';
+          const result = await api(`/api/tasks/${task.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'done' }) });
+          if (!result.ok) { done.disabled = false; done.textContent = 'Retry'; showToast(result.data.error || 'Could not update task.'); return; }
+          loadDashboard();
+        });
+        item.append(details, done); return item;
+      }));
+      el.combinedPendingTaskEmpty.classList.toggle('hidden', pendingTasks.length > 0);
+    }
+
     async function loadDashboard() {
       el.dashboardRefresh.disabled = true;
       el.dashboardRefresh.textContent = 'Refreshing…';
@@ -1122,16 +1390,20 @@
       el.dashboardError.classList.add('hidden');
       try {
         const fresh = `&_refresh=${Date.now()}`;
-        const [all, pending, done] = await Promise.all([
+        const [all, pending, done, pendingTasksResult] = await Promise.all([
           api('/api/tickets?limit=500' + fresh),
           api('/api/tickets?status=pending&limit=500' + fresh),
           api('/api/tickets?status=done&limit=1' + fresh),
+          api('/api/tasks?status=pending&limit=500' + fresh),
         ]);
-        if (!all.ok || !pending.ok || !done.ok) throw new Error('Dashboard data could not be loaded.');
+        if (!all.ok || !pending.ok || !done.ok || !pendingTasksResult.ok) throw new Error('Dashboard data could not be loaded.');
         const tickets = Array.isArray(all.data.tickets) ? all.data.tickets : [];
         dashboardTickets = tickets;
         const pendingTickets = Array.isArray(pending.data.tickets) ? pending.data.tickets : [];
         const pendingTotal = Number(pending.data.total || 0);
+        const pendingTasks = Array.isArray(pendingTasksResult.data.tasks) ? pendingTasksResult.data.tasks : [];
+        el.combinedPendingTicketCount.textContent = toBnDigits(pendingTotal);
+        renderCombinedPendingQueue(pendingTasks);
         const doneTotal = Number(done.data.total || 0);
         const total = Number(all.data.total ?? (pendingTotal + doneTotal));
         const todayKey = dhakaDateKey(new Date());
@@ -1569,6 +1841,358 @@
     }
 
     // ---------- ইভেন্ট ----------
+    const taskAssignees = ['Rupok Kumar Roy', 'Towhedul Islam', 'Md. Imam Hossan Chowdhury', 'Muhammad Fokhrul Hasan', 'Md. Tanvir Ahamed Sarkar', 'Md. Fahad Hossen', 'Mabubul Alam Patwary'];
+    const taskStatusNames = { pending: 'Pending', in_progress: 'In progress', done: 'Done' };
+
+    function setAssistantWorkspace(tasksMode) {
+      assistantTaskMode = tasksMode;
+      if (tasksMode) el.taskAssistantDock.append(el.assistantDemo, el.assistantPanel);
+      else el.pendingPanel.after(el.assistantDemo, el.assistantPanel);
+
+      assistantConversation.length = 0;
+      assistantConversationEmployeeID = '';
+      assistantSearchSequence++;
+      clearTimeout(assistantSearchTimer);
+      hide(el.assistantEmployeeOptions);
+      hide(el.assistantAssigneeOptions);
+      clearAssistantEmployee();
+      el.assistantInput.value = '';
+      el.assistantExamples.classList.add('hidden');
+      el.assistantExamples.classList.remove('flex');
+      el.assistantExamplesToggle.setAttribute('aria-expanded', 'false');
+      assistantVoiceMode = false;
+      stopAssistantAudioInput();
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      el.assistantMic.setAttribute('aria-pressed', 'false');
+      el.assistantMic.textContent = '🎙️';
+      el.assistantMic.title = 'Start voice chat';
+      el.assistantSpeakToggle.textContent = assistantVoiceReplies ? '🔊' : '◖)))';
+
+      el.assistantTitle.textContent = tasksMode ? 'Task Assistant' : 'Ticket Assistant';
+      el.assistantDemoFlow.textContent = tasksMode
+        ? '1. Given by  →  2. Task details  →  3. Assign to'
+        : '1. Employee name  →  2. Problem  →  3. Assign by name';
+      el.assistantDemoMessage.textContent = tasksMode
+        ? 'Given by Mabubul. Training room printer setup korte hobe. Assign to Towhedul Islam.'
+        : 'Sumaiya Islam-er laptop-e internet nei. Assign to Rupok Kumar Roy.';
+      el.assistantSubtitle.textContent = tasksMode
+        ? 'Given by → task details → assign to'
+        : 'Employee name → problem → assign by name';
+      el.assistantInput.placeholder = tasksMode ? 'First, who gave this task?…' : 'Ask Ticket Assistant…';
+      el.assistantPreviewNotice.textContent = tasksMode
+        ? 'Start with who gave the task, then describe the work, then choose who to assign it to.'
+        : 'AI service server-এ set হলে chat থেকে Pending ticket তৈরি হবে।';
+      el.assistantPreviewNotice.classList.toggle('hidden', assistantEnabled);
+      el.assistantMessages.replaceChildren();
+      appendAssistantMessage('assistant', tasksMode
+        ? 'Hello! First tell me who gave the task, then describe what needs to be done and who to assign it to.'
+        : 'Hello! Tell me the employee name and issue, then mention who to assign it to.');
+      el.assistantMessages.append(el.assistantPreviewNotice);
+
+      const taskPrompts = [
+        ['Given by: Jaber. Task details: Prepare a laptop for Sumaiya. Assign to Towhedul Islam.', 'Given by · laptop setup · Towhedul'],
+        ['Given by: Mabubul. Task details: Configure the training room printer. Assign to Rupok Kumar Roy.', 'Given by · printer setup · Rupok'],
+      ];
+      document.querySelectorAll('[data-assistant-prompt]').forEach((button, index) => {
+        if (tasksMode) {
+          const prompt = taskPrompts[index] || taskPrompts[0];
+          button.dataset.assistantPrompt = prompt[0];
+          button.textContent = prompt[1];
+        } else if (assistantPromptDefaults[index]) {
+          button.dataset.assistantPrompt = assistantPromptDefaults[index].prompt;
+          button.textContent = assistantPromptDefaults[index].label;
+        }
+      });
+      el.assistantStatus.textContent = tasksMode
+        ? (assistantEnabled ? 'Task assistant ready · Given by → task details → assign to.' : 'Task chat and voice will work when the AI service is connected.')
+        : (assistantEnabled ? 'AI ready · create pending tickets by chat or voice.' : 'AI service is not configured yet.');
+    }
+
+    function switchWorkspace(mode, updateURL = true) {
+      const tasksMode = mode === 'tasks';
+      if (assistantRequestActive && assistantTaskMode !== tasksMode) return;
+      if (assistantTaskMode !== tasksMode || el.assistantPanel.parentElement !== (tasksMode ? el.taskAssistantDock : el.ticketSection)) {
+        setAssistantWorkspace(tasksMode);
+      }
+      el.workspaceLayout.classList.toggle('hidden', tasksMode);
+      el.taskWorkspace.classList.toggle('hidden', !tasksMode);
+      el.ticketModeButton.classList.toggle('is-active', !tasksMode);
+      el.taskModeButton.classList.toggle('is-active', tasksMode);
+      el.ticketModeButton.setAttribute('aria-selected', String(!tasksMode));
+      el.taskModeButton.setAttribute('aria-selected', String(tasksMode));
+      if (updateURL) {
+        const url = new URL(window.location.href);
+        if (tasksMode) url.searchParams.set('view', 'tasks');
+        else url.searchParams.delete('view');
+        window.history.replaceState({}, '', url);
+      }
+      if (tasksMode) loadTaskBoard();
+    }
+
+    function taskPriorityLabel(priority) {
+      return ({ low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' })[priority] || 'Medium';
+    }
+
+    function taskDueLabel(value) {
+      if (!value) return 'No due date';
+      const date = new Date(value + 'T00:00:00');
+      return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en', { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
+    }
+
+    function localDayKey(value) {
+      const date = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    }
+
+    function getTaskAnalyticsEntries() {
+      const range = el.taskAnalyticsRange.value;
+      if (range === 'all') return taskEntries;
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - Number(range));
+      return taskEntries.filter((task) => {
+        const created = task.created_at ? new Date(task.created_at) : null;
+        return created && !Number.isNaN(created.getTime()) && created >= cutoff;
+      });
+    }
+
+    function createTaskBar(label, value, max, color) {
+      const row = document.createElement('div');
+      row.className = 'task-analytics-row';
+      const top = document.createElement('div');
+      top.className = 'task-analytics-row-top';
+      const name = document.createElement('span'); name.textContent = label;
+      const count = document.createElement('strong'); count.textContent = String(value);
+      top.append(name, count);
+      const track = document.createElement('div'); track.className = 'task-analytics-track';
+      const fill = document.createElement('span'); fill.className = `task-analytics-fill ${color}`;
+      fill.style.width = `${max ? Math.max(value ? 5 : 0, (value / max) * 100) : 0}%`;
+      track.append(fill);
+      row.append(top, track);
+      return row;
+    }
+
+    function renderTaskAnalytics() {
+      const entries = getTaskAnalyticsEntries();
+      const today = localDayKey(new Date());
+      const done = entries.filter((task) => task.status === 'done').length;
+      const pending = entries.filter((task) => task.status === 'pending').length;
+      const inProgress = entries.filter((task) => task.status === 'in_progress').length;
+      const createdToday = entries.filter((task) => task.created_at && localDayKey(task.created_at) === today).length;
+      el.taskTotalCount.textContent = toBnDigits(entries.length);
+      el.taskPendingCount.textContent = toBnDigits(pending);
+      el.taskInProgressCount.textContent = toBnDigits(inProgress);
+      el.taskDoneCount.textContent = toBnDigits(done);
+      el.taskTodayCount.textContent = toBnDigits(createdToday);
+      const rangeName = el.taskAnalyticsRange.value === 'all' ? 'All available' : `Last ${el.taskAnalyticsRange.value} days`;
+      el.taskAnalyticsHint.textContent = `${rangeName} · ${entries.length} tasks included · latest 500 loaded`;
+
+      const statusRows = [
+        ['Pending', pending, 'amber'],
+        ['In progress', inProgress, 'blue'],
+        ['Completed', done, 'green'],
+      ];
+      el.taskStatusChart.replaceChildren(...statusRows.map(([label, value, color]) => createTaskBar(label, value, entries.length, color)));
+      const rate = entries.length ? Math.round((done / entries.length) * 100) : 0;
+      const completion = document.createElement('p'); completion.className = 'task-analytics-completion';
+      completion.textContent = `${rate}% complete`;
+      el.taskStatusChart.append(completion);
+
+      const ownerCounts = new Map();
+      entries.filter((task) => task.status !== 'done').forEach((task) => {
+        const owner = task.assigned_to || 'Unassigned';
+        ownerCounts.set(owner, (ownerCounts.get(owner) || 0) + 1);
+      });
+      const owners = [...ownerCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+      const ownerMax = Math.max(0, ...owners.map(([, value]) => value));
+      el.taskOwnerChart.replaceChildren(...(owners.length ? owners.map(([label, value]) => createTaskBar(label, value, ownerMax, label === 'Unassigned' ? 'amber' : 'teal')) : [Object.assign(document.createElement('p'), { className: 'task-analytics-empty', textContent: 'No active tasks in this range.' })]));
+
+      const monthBuckets = [];
+      const now = new Date();
+      for (let offset = 5; offset >= 0; offset--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+        monthBuckets.push({ year: date.getFullYear(), month: date.getMonth(), label: new Intl.DateTimeFormat('en', { month: 'short' }).format(date), count: 0 });
+      }
+      const monthLookup = new Map(monthBuckets.map((bucket) => [`${bucket.year}-${bucket.month}`, bucket]));
+      entries.forEach((task) => {
+        if (!task.created_at) return;
+        const date = new Date(task.created_at);
+        const bucket = monthLookup.get(`${date.getFullYear()}-${date.getMonth()}`);
+        if (bucket) bucket.count++;
+      });
+      const monthMax = Math.max(1, ...monthBuckets.map((bucket) => bucket.count));
+      el.taskTrendChart.replaceChildren(...monthBuckets.map((bucket) => {
+        const row = document.createElement('div'); row.className = 'task-trend-row';
+        const label = document.createElement('span'); label.textContent = bucket.label;
+        const track = document.createElement('div'); track.className = 'task-analytics-track';
+        const fill = document.createElement('span'); fill.className = 'task-analytics-fill blue'; fill.style.width = `${bucket.count ? Math.max(5, (bucket.count / monthMax) * 100) : 0}%`;
+        track.append(fill);
+        const count = document.createElement('strong'); count.textContent = String(bucket.count);
+        row.append(label, track, count); return row;
+      }));
+    }
+
+    function taskAssigneeSelect(task) {
+      const select = document.createElement('select');
+      select.className = 'task-inline-select';
+      select.setAttribute('aria-label', `Assign ${task.title}`);
+      const unassigned = new Option('Unassigned', '');
+      select.append(unassigned);
+      taskAssignees.forEach((name) => select.append(new Option(name, name)));
+      select.value = task.assigned_to || '';
+      select.addEventListener('change', () => updateTask(task.id, { assigned_to: select.value }, select));
+      return select;
+    }
+
+    function taskStatusSelect(task) {
+      const select = document.createElement('select');
+      select.className = `task-status-select status-${task.status}`;
+      select.setAttribute('aria-label', `Status for ${task.title}`);
+      Object.entries(taskStatusNames).forEach(([value, label]) => select.append(new Option(label, value)));
+      select.value = task.status;
+      select.addEventListener('change', () => updateTask(task.id, { status: select.value }, select));
+      return select;
+    }
+
+    function createTaskCard(task) {
+      const card = document.createElement('article');
+      card.className = `task-card${task.status === 'done' ? ' is-done' : ''}`;
+      const top = document.createElement('div'); top.className = 'task-card-topline';
+      const number = document.createElement('span'); number.className = 'task-number'; number.textContent = `TSK-${String(task.id).padStart(6, '0')}`;
+      top.append(number);
+      const description = document.createElement('p'); description.className = 'task-card-description'; description.textContent = task.description || 'No extra details';
+      const requester = document.createElement('p'); requester.className = 'task-card-meta text-xs text-slate-500'; requester.textContent = `Given by: ${task.created_by || 'Not recorded'}`;
+      const footer = document.createElement('div'); footer.className = 'task-card-footer';
+      const owner = document.createElement('div'); owner.className = 'task-card-owner';
+      const ownerLabel = document.createElement('span'); ownerLabel.textContent = 'OWNER';
+      owner.append(ownerLabel, taskAssigneeSelect(task));
+      const actions = document.createElement('div'); actions.className = 'task-card-actions';
+      actions.append(taskStatusSelect(task));
+      const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'task-edit-button'; edit.textContent = 'Edit';
+      edit.addEventListener('click', () => beginTaskEdit(task));
+      actions.append(edit); footer.append(owner, actions); card.append(top, description, requester, footer);
+      return card;
+    }
+    function renderTaskBoard() {
+      const query = el.taskSearchInput.value.trim().toLocaleLowerCase();
+      const pendingTasks = taskEntries.filter((task) => task.status === 'pending');
+      const visible = pendingTasks.filter((task) => {
+        const text = [task.description, task.assigned_to, `tsk-${task.id}`].filter(Boolean).join(' ').toLocaleLowerCase();
+        return !query || text.includes(query);
+      });
+      el.taskList.replaceChildren(...visible.map(createTaskCard));
+      el.taskEmptyState.classList.toggle('hidden', visible.length > 0);
+      el.taskListSummary.textContent = `${visible.length} shown · ${pendingTasks.length} pending`;
+      renderTaskAnalytics();
+    }
+
+    async function loadTaskBoard() {
+      el.taskRefreshButton.disabled = true;
+      el.taskLoadError.classList.add('hidden');
+      try {
+        const { ok, data } = await api('/api/tasks?limit=500');
+        if (!ok) throw new Error(data.error || 'Tasks could not be loaded.');
+        taskEntries = Array.isArray(data.tasks) ? data.tasks : [];
+        renderTaskBoard();
+      } catch (error) {
+        el.taskLoadError.textContent = error.message || 'Tasks could not be loaded.';
+        el.taskLoadError.classList.remove('hidden');
+      } finally {
+        el.taskRefreshButton.disabled = false;
+      }
+    }
+
+    function resetTaskForm() {
+      editingTaskId = null;
+      el.taskCreatedByInput.querySelectorAll('[data-task-legacy]').forEach((option) => option.remove());
+      el.taskForm.reset();
+      el.taskFormTitle.textContent = 'Create a task';
+      el.taskSubmitButton.textContent = 'Create task';
+      el.taskCancelEditButton.classList.add('hidden');
+      el.taskFormError.classList.add('hidden');
+    }
+
+    function setTaskCreatorValue(value) {
+      const creator = el.taskCreatedByInput;
+      creator.querySelectorAll('[data-task-legacy]').forEach((option) => option.remove());
+      const name = String(value || '').trim();
+      if (name && !Array.from(creator.options).some((option) => option.value === name)) {
+        const legacyOption = new Option(name, name);
+        legacyOption.dataset.taskLegacy = 'true';
+        creator.add(legacyOption);
+      }
+      creator.value = name;
+    }
+
+    function beginTaskEdit(task) {
+      editingTaskId = task.id;
+      el.taskDescriptionInput.value = task.description || '';
+      setTaskCreatorValue(task.created_by);
+      el.taskAssigneeInput.value = task.assigned_to || '';
+      el.taskFormTitle.textContent = 'Edit task';
+      el.taskSubmitButton.textContent = 'Save changes';
+      el.taskCancelEditButton.classList.remove('hidden');
+      el.taskFormError.classList.add('hidden');
+      el.taskForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      el.taskDescriptionInput.focus({ preventScroll: true });
+    }
+
+    async function updateTask(id, changes, control = null) {
+      if (control) control.disabled = true;
+      try {
+        const { ok, data } = await api(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(changes) });
+        if (!ok) throw new Error(data.error || 'Task could not be updated.');
+        const index = taskEntries.findIndex((task) => task.id === id);
+        if (index >= 0 && data.task) taskEntries[index] = data.task;
+        renderTaskBoard();
+        showToast('Task updated.', 'info');
+      } catch (error) {
+        if (control) control.disabled = false;
+        showToast(error.message || 'Task could not be updated.');
+        loadTaskBoard();
+      }
+    }
+
+    el.taskForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      el.taskFormError.classList.add('hidden');
+      const payload = {
+        description: el.taskDescriptionInput.value.trim(),
+        created_by: el.taskCreatedByInput.value.trim(),
+        assigned_to: el.taskAssigneeInput.value,
+      };
+      el.taskSubmitButton.disabled = true;
+      try {
+        const editing = editingTaskId !== null;
+        if (!editing) payload.title = payload.description.split(/[.!?\n]/)[0].trim().slice(0, 160) || payload.description.slice(0, 160);
+        const url = editing ? `/api/tasks/${editingTaskId}` : '/api/tasks';
+        const { ok, data } = await api(url, { method: editing ? 'PATCH' : 'POST', body: JSON.stringify(payload) });
+        if (!ok) throw new Error(data.error || 'Task could not be saved.');
+        resetTaskForm();
+        await loadTaskBoard();
+        showToast(editing ? 'Task changes saved.' : 'Task created.', 'info');
+      } catch (error) {
+        el.taskFormError.textContent = error.message || 'Task could not be saved.';
+        el.taskFormError.classList.remove('hidden');
+      } finally {
+        el.taskSubmitButton.disabled = false;
+      }
+    });
+
+    el.ticketModeButton.addEventListener('click', () => switchWorkspace('tickets'));
+    el.taskModeButton.addEventListener('click', () => switchWorkspace('tasks'));
+    el.taskCancelEditButton.addEventListener('click', resetTaskForm);
+    el.taskRefreshButton.addEventListener('click', loadTaskBoard);
+    el.taskAssistantOpenButton.addEventListener('click', () => {
+      el.assistantPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.setTimeout(() => el.assistantInput.focus({ preventScroll: true }), 280);
+    });
+    el.taskSearchInput.addEventListener('input', () => {
+      clearTimeout(taskSearchTimer);
+      taskSearchTimer = setTimeout(renderTaskBoard, 100);
+    });
+    el.taskAnalyticsRange.addEventListener('change', renderTaskAnalytics);
+
     el.doneBtn.addEventListener('click', () => submitTicket('done'));
     el.pendingBtn.addEventListener('click', () => submitTicket('pending'));
     el.dashboardRefresh.addEventListener('click', loadDashboard);
@@ -1585,6 +2209,12 @@
         el.assistantInput.focus();
         el.assistantStatus.textContent = 'Example বসানো হয়েছে। AI service যুক্ত হলে এটি পাঠাতে পারবেন।';
       });
+    });
+    el.assistantDemoUse.addEventListener('click', () => {
+      el.assistantInput.value = el.assistantDemoMessage.textContent.trim();
+      el.assistantInput.dispatchEvent(new Event('input', { bubbles: true }));
+      el.assistantInput.focus();
+      el.assistantStatus.textContent = 'Demo message loaded. Press send to try it.';
     });
     el.assistantExamplesToggle.addEventListener('click', () => {
       const expanded = el.assistantExamples.classList.contains('hidden');
@@ -1660,6 +2290,23 @@
     el.assistantInput.addEventListener('input', updateAssistantSuggestions);
     el.assistantClearPerson.addEventListener('click', clearAssistantEmployee);
     el.assistantInput.addEventListener('keydown', (event) => {
+      const activeOptions = !el.assistantAssigneeOptions.classList.contains('hidden')
+          ? el.assistantAssigneeOptions
+          : !el.assistantEmployeeOptions.classList.contains('hidden') ? el.assistantEmployeeOptions : null;
+      const optionButtons = activeOptions ? [...activeOptions.querySelectorAll('button[role="option"]')] : [];
+      if (optionButtons.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        event.preventDefault();
+        setAssistantSuggestionActive(activeOptions, assistantSuggestionIndex + (event.key === 'ArrowDown' ? 1 : -1));
+        return;
+      }
+      if (optionButtons.length && (event.key === 'Tab' || event.key === 'Enter')) {
+        const selected = optionButtons[assistantSuggestionIndex] || optionButtons[0];
+        if (selected) {
+          event.preventDefault();
+          selected.click();
+          return;
+        }
+      }
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
         sendAssistantMessage();
@@ -1675,6 +2322,7 @@
     loadPending();
     loadDashboard();
     loadAssistantStatus();
+    switchWorkspace(new URLSearchParams(window.location.search).get('view') === 'tasks' ? 'tasks' : 'tickets', false);
     refreshAssistantMicDevices();
     if (window.matchMedia('(pointer: fine)').matches) el.nameInput.focus();
   })();

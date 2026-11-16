@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,7 +28,13 @@ type TicketUseCase interface {
 	Complete(ctx context.Context, key string) (usecase.CompleteTicketResult, error)
 	Assign(ctx context.Context, key, assignee string) (domain.Ticket, error)
 	Get(ctx context.Context, key string) (domain.Ticket, error)
-	List(ctx context.Context, status string, limit int) ([]domain.Ticket, int64, error)
+	List(ctx context.Context, status string, from, until time.Time, limit int) ([]domain.Ticket, int64, error)
+}
+
+type TaskUseCase interface {
+	Create(ctx context.Context, input usecase.CreateTaskInput) (domain.Task, error)
+	List(ctx context.Context, filter domain.TaskFilter) ([]domain.Task, int64, error)
+	Update(ctx context.Context, id uint, input usecase.UpdateTaskInput) (domain.Task, error)
 }
 
 type ticketView struct {
@@ -42,6 +49,23 @@ type ticketView struct {
 	CreatedAt    time.Time       `json:"created_at"`
 }
 
+type taskView struct {
+	ID          uint      `json:"id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	CreatedBy   string    `json:"created_by"`
+	AssignedTo  string    `json:"assigned_to"`
+	Priority    string    `json:"priority"`
+	DueDate     string    `json:"due_date"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func toTaskView(task domain.Task) taskView {
+	return taskView{ID: task.ID, Title: task.Title, Description: task.Description, CreatedBy: task.CreatedBy, AssignedTo: task.AssignedTo, Priority: task.Priority, DueDate: task.DueDate, Status: task.Status, CreatedAt: task.CreatedAt, UpdatedAt: task.UpdatedAt}
+}
+
 func toView(ticket domain.Ticket, emailQueued bool) ticketView {
 	return ticketView{
 		ID: ticket.ID, TicketNumber: ticket.TicketNumber, Employee: ticket.Employee(),
@@ -53,6 +77,7 @@ func toView(ticket domain.Ticket, emailQueued bool) ticketView {
 
 type Handler struct {
 	tickets        TicketUseCase
+	tasks          TaskUseCase
 	assistant      *groqapi.Client
 	assistantMu    sync.Mutex
 	assistantRates map[string]assistantRateEntry
@@ -63,7 +88,15 @@ type assistantRateEntry struct {
 	count  int
 }
 
-func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, cfg config.Config) *gin.Engine {
+var assistantGluedAssign = regexp.MustCompile(`(?i)\bassing([[:alpha:]])`)
+var assistantMisspelledAssign = regexp.MustCompile(`(?i)\bassing\b`)
+
+func normalizeAssistantBanglish(text string) string {
+	text = assistantGluedAssign.ReplaceAllString(text, "assign $1")
+	return assistantMisspelledAssign.ReplaceAllString(text, "assign")
+}
+
+func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, cfg config.Config, taskServices ...TaskUseCase) *gin.Engine {
 	if cfg.GinMode != "" {
 		gin.SetMode(cfg.GinMode)
 	}
@@ -80,27 +113,43 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 	})
 
 	handler := &Handler{tickets: tickets, assistant: groqapi.NewClient(cfg.GroqAPIKey, cfg.GroqModel), assistantRates: make(map[string]assistantRateEntry)}
+	if len(taskServices) > 0 {
+		handler.tasks = taskServices[0]
+	}
 	site := router.Group("/")
 	if cfg.AppUser != "" && cfg.AppPassword != "" {
 		site.Use(gin.BasicAuth(gin.Accounts{cfg.AppUser: cfg.AppPassword}))
 		log.Println("🔒 Basic Auth enabled")
 	}
+	site.Use(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		if path == "/" || path == "/dashboard" || path == "/admin" {
+			c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+			c.Header("Pragma", "no-cache")
+		}
+		c.Next()
+	})
 	site.StaticFile("/", "./static/index.html")
 	site.StaticFile("/dashboard", "./static/index.html")
 	site.StaticFile("/admin", "./static/admin.html")
 	site.StaticFile("/theme.css", "./static/theme.css")
+	site.StaticFile("/premium.css", "./static/premium.css")
 	site.StaticFile("/theme.js", "./static/theme.js")
 
 	api := site.Group("/api")
 	api.GET("/search", handler.searchEmployees)
 	api.GET("/assistant/status", handler.assistantStatus)
 	api.POST("/assistant", handler.assistantChat)
+	api.POST("/assistant/tasks", handler.assistantTaskChat)
 	api.POST("/assistant/transcribe", handler.assistantTranscribe)
 	api.GET("/tickets", handler.listTickets)
 	api.POST("/tickets", handler.createTicket)
 	api.GET("/tickets/:id", handler.getTicket)
 	api.POST("/tickets/:id/done", handler.markDone)
 	api.PUT("/tickets/:id/assignee", handler.assignTicket)
+	api.GET("/tasks", handler.listTasks)
+	api.POST("/tasks", handler.createTask)
+	api.PATCH("/tasks/:id", handler.updateTask)
 
 	router.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "page not found"})
@@ -182,17 +231,69 @@ var assistantAssignees = []string{
 	"Mabubul Alam Patwary",
 }
 
+var assistantAssigneeAliases = map[string]string{
+	"jaber":         "Mabubul Alam Patwary",
+	"jaber patwary": "Mabubul Alam Patwary",
+}
+
 func resolveAssistantAssignee(value string) string {
+	key := normalizeAssistantPersonName(value)
 	for _, name := range assistantAssignees {
-		if normalizeAssistantValue(name) == normalizeAssistantValue(value) {
+		if normalizeAssistantPersonName(name) == key {
 			return name
 		}
 	}
-	return ""
+	return assistantAssigneeAliases[key]
 }
 
 func normalizeAssistantValue(value string) string {
 	return strings.ToLower(strings.Join(strings.Fields(value), " "))
+}
+
+func normalizeAssistantPersonName(value string) string {
+	var tokens []string
+	for _, token := range assistantNameTokens(value) {
+		switch token {
+		case "bhai", "vai", "bhaiya", "bhaiyer", "vaiyer", "apu", "apa", "sir", "madam", "mr", "mrs", "miss", "md", "er", "ar", "r", "জনাব", "ভাই", "ভাইয়ের", "ভাইয়ের", "এর", "র", "আপু", "আপা", "স্যার", "ম্যাডাম":
+			continue
+		}
+		tokens = append(tokens, token)
+	}
+	return strings.Join(tokens, " ")
+}
+
+func assistantEmployeeNameMatches(candidate, requested string) bool {
+	wanted := strings.Fields(normalizeAssistantPersonName(requested))
+	if len(wanted) == 0 {
+		return false
+	}
+	canonical := strings.Fields(normalizeAssistantPersonName(candidate))
+	if strings.Join(canonical, " ") == strings.Join(wanted, " ") {
+		return true
+	}
+	canonicalSet := make(map[string]struct{}, len(canonical))
+	for _, token := range canonical {
+		canonicalSet[token] = struct{}{}
+	}
+	for _, token := range wanted {
+		if _, ok := canonicalSet[token]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func findAssistantEmployeeMatches(requested string, employees []domain.Employee, limit int) []domain.Employee {
+	matches := make([]domain.Employee, 0)
+	for _, employee := range employees {
+		if assistantEmployeeNameMatches(employee.Name, requested) {
+			matches = append(matches, employee)
+		}
+	}
+	if limit > 0 && len(matches) > limit {
+		matches = matches[:limit]
+	}
+	return matches
 }
 
 func isAssistantRateLimited(err error) bool {
@@ -334,6 +435,7 @@ func (h *Handler) assistantChat(c *gin.Context) {
 			return
 		}
 		message.Content = strings.TrimSpace(message.Content)
+		message.Content = normalizeAssistantBanglish(message.Content)
 		if message.Content == "" || len([]rune(message.Content)) > 1200 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "each message must contain 1 to 1200 characters"})
 			return
@@ -405,11 +507,9 @@ func (h *Handler) assistantChat(c *gin.Context) {
 			return
 		}
 		matches := h.tickets.SearchEmployees(details.EmployeeName, usecase.MaxSearchResults)
-		exact := make([]domain.Employee, 0, len(matches))
-		for _, match := range matches {
-			if normalizeAssistantValue(match.Name) == normalizeAssistantValue(details.EmployeeName) {
-				exact = append(exact, match)
-			}
+		exact := findAssistantEmployeeMatches(details.EmployeeName, matches, usecase.MaxSearchResults)
+		if len(exact) == 0 {
+			exact = findAssistantEmployeeMatches(details.EmployeeName, h.tickets.ListEmployees(), usecase.MaxSearchResults)
 		}
 		if len(exact) != 1 {
 			if len(matches) == 0 {
@@ -446,6 +546,117 @@ func (h *Handler) assistantChat(c *gin.Context) {
 		reply += " Assignee: " + ticket.AssignedTo + "."
 	}
 	c.JSON(http.StatusCreated, gin.H{"reply": reply, "ticket": toView(ticket, emailQueued), "created": true})
+}
+
+func (h *Handler) assistantTaskChat(c *gin.Context) {
+	if !h.assistant.Enabled() || h.tasks == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI task assistant is not configured"})
+		return
+	}
+	if !h.allowAssistantRequest(c.ClientIP(), time.Now()) {
+		c.Header("Retry-After", "60")
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Task assistant is busy. Please wait a minute and try again."})
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 20<<10)
+	var request assistantChatRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task assistant request"})
+		return
+	}
+	if len(request.Messages) == 0 || len(request.Messages) > 12 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "send between 1 and 12 messages"})
+		return
+	}
+	contentLength := 0
+	for i, message := range request.Messages {
+		message.Role = strings.ToLower(strings.TrimSpace(message.Role))
+		message.Content = strings.TrimSpace(message.Content)
+		message.Content = normalizeAssistantBanglish(message.Content)
+		if (message.Role != "user" && message.Role != "assistant") || message.Content == "" || len([]rune(message.Content)) > 1200 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "each message must have a valid role and 1 to 1200 characters"})
+			return
+		}
+		contentLength += len(message.Content)
+		request.Messages[i] = message
+	}
+	if contentLength > 6000 || request.Messages[len(request.Messages)-1].Role != "user" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "conversation is too long or does not end with a user message"})
+		return
+	}
+	details, err := h.assistant.ExtractTask(c.Request.Context(), request.Messages, assistantAssignees)
+	if err != nil {
+		log.Printf("task assistant extraction failed: %v", err)
+		if isAssistantRateLimited(err) {
+			c.Header("Retry-After", "60")
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Task assistant is busy. Please wait a minute and try again."})
+			return
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": "AI service could not process the task. Try again."})
+		return
+	}
+	details.Title = strings.TrimSpace(details.Title)
+	details.Description = strings.TrimSpace(details.Description)
+	details.CreatedBy = strings.TrimSpace(details.CreatedBy)
+	details.Assignee = strings.TrimSpace(details.Assignee)
+	details.Priority = "medium"
+	details.DueDate = ""
+	if selected := strings.TrimSpace(request.SelectedAssignee); selected != "" {
+		details.Assignee = resolveAssistantAssignee(selected)
+		if details.Assignee == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "selected assignee is invalid"})
+			return
+		}
+	} else if details.Assignee != "" {
+		details.Assignee = resolveAssistantAssignee(details.Assignee)
+	}
+	if details.CreatedBy == "" {
+		c.JSON(http.StatusOK, gin.H{"reply": "প্রথমে বলুন—এই task-টি কে দিয়েছেন? Given by নামটি বলুন।"})
+		return
+	}
+	if len([]rune(details.CreatedBy)) > 100 {
+		c.JSON(http.StatusOK, gin.H{"reply": "Given by নামটি ১০০ অক্ষরের মধ্যে ছোট করে বলুন।"})
+		return
+	}
+	if details.Description == "" {
+		details.Description = details.Title
+	}
+	if details.Description == "" {
+		c.JSON(http.StatusOK, gin.H{"reply": "এবার task-এ কী কাজ করতে হবে, সেটি বলুন।"})
+		return
+	}
+	if len([]rune(details.Description)) > 2000 {
+		c.JSON(http.StatusOK, gin.H{"reply": "Task-এর কাজের বিবরণ ২০০০ অক্ষরের মধ্যে ছোট করে বলুন।"})
+		return
+	}
+	if details.Title == "" {
+		details.Title = strings.TrimSpace(strings.SplitN(details.Description, ".", 2)[0])
+		if len([]rune(details.Title)) > 160 {
+			details.Title = string([]rune(details.Title)[:160])
+		}
+	}
+	if details.Assignee == "" {
+		c.JSON(http.StatusOK, gin.H{"reply": "এবার IT Team থেকে কাকে assign করব? নামটি বলুন বা তালিকা থেকে বেছে নিন।", "needs_assignee": true})
+		return
+	}
+	if len([]rune(details.Title)) > 160 {
+		c.JSON(http.StatusOK, gin.H{"reply": "Task-এর শিরোনামটি ১৬০ অক্ষরের মধ্যে ছোট করে বলুন।"})
+		return
+	}
+	task, err := h.tasks.Create(c.Request.Context(), usecase.CreateTaskInput{
+		Title: details.Title, Description: details.Description, CreatedBy: details.CreatedBy,
+		AssignedTo: details.Assignee, Priority: details.Priority, DueDate: details.DueDate,
+	})
+	if err != nil {
+		log.Printf("task assistant save failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create task"})
+		return
+	}
+	reply := fmt.Sprintf("Task TSK-%06d created.", task.ID)
+	if task.AssignedTo != "" {
+		reply += " Assigned to " + task.AssignedTo + "."
+	}
+	c.JSON(http.StatusCreated, gin.H{"reply": reply, "task": toTaskView(task), "created": true})
 }
 
 func (h *Handler) allowAssistantRequest(clientIP string, now time.Time) bool {
@@ -592,7 +803,21 @@ func (h *Handler) listTickets(c *gin.Context) {
 		limit = 100
 	}
 	status := strings.ToLower(strings.TrimSpace(c.Query("status")))
-	tickets, total, err := h.tickets.List(c.Request.Context(), status, limit)
+	var from, until time.Time
+	if c.Query("from") != "" || c.Query("until") != "" {
+		var parseErr error
+		from, parseErr = time.Parse(time.RFC3339, c.Query("from"))
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "from must be an RFC3339 timestamp"})
+			return
+		}
+		until, parseErr = time.Parse(time.RFC3339, c.Query("until"))
+		if parseErr != nil || !until.After(from) || until.Sub(from) > 24*time.Hour+time.Minute {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "until must be after from and within one day"})
+			return
+		}
+	}
+	tickets, total, err := h.tickets.List(c.Request.Context(), status, from, until, limit)
 	if err != nil {
 		if err == usecase.ErrInvalidFilter {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "status must be 'done' or 'pending'"})
@@ -607,4 +832,131 @@ func (h *Handler) listTickets(c *gin.Context) {
 		views = append(views, toView(ticket, false))
 	}
 	c.JSON(http.StatusOK, gin.H{"tickets": views, "count": len(views), "total": total})
+}
+
+type createTaskRequest struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	CreatedBy   string `json:"created_by"`
+	AssignedTo  string `json:"assigned_to"`
+	Priority    string `json:"priority"`
+	DueDate     string `json:"due_date"`
+}
+
+type updateTaskRequest struct {
+	Title       *string `json:"title"`
+	Description *string `json:"description"`
+	CreatedBy   *string `json:"created_by"`
+	AssignedTo  *string `json:"assigned_to"`
+	Priority    *string `json:"priority"`
+	DueDate     *string `json:"due_date"`
+	Status      *string `json:"status"`
+}
+
+func (h *Handler) listTasks(c *gin.Context) {
+	if h.tasks == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "task service is unavailable"})
+		return
+	}
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "100"))
+	if err != nil || limit <= 0 || limit > usecase.MaxTaskLimit {
+		limit = 100
+	}
+	tasks, total, err := h.tasks.List(c.Request.Context(), domain.TaskFilter{
+		Status: c.Query("status"), Assignee: c.Query("assignee"), Query: c.Query("q"), Limit: limit,
+	})
+	if err != nil {
+		if err == usecase.ErrTaskInvalidStatus {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "status must be pending, in_progress, or done"})
+			return
+		}
+		log.Printf("task list failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load tasks"})
+		return
+	}
+	views := make([]taskView, 0, len(tasks))
+	for _, task := range tasks {
+		views = append(views, toTaskView(task))
+	}
+	c.JSON(http.StatusOK, gin.H{"tasks": views, "count": len(views), "total": total})
+}
+
+func (h *Handler) createTask(c *gin.Context) {
+	if h.tasks == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "task service is unavailable"})
+		return
+	}
+	var request createTaskRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task request"})
+		return
+	}
+	assignee := strings.TrimSpace(request.AssignedTo)
+	if assignee != "" {
+		assignee = resolveAssistantAssignee(assignee)
+		if assignee == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "choose an IT Team member from the list"})
+			return
+		}
+	}
+	task, err := h.tasks.Create(c.Request.Context(), usecase.CreateTaskInput{
+		Title: request.Title, Description: request.Description, CreatedBy: request.CreatedBy, AssignedTo: assignee,
+		Priority: request.Priority, DueDate: request.DueDate,
+	})
+	if err != nil {
+		writeTaskError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"task": toTaskView(task)})
+}
+
+func (h *Handler) updateTask(c *gin.Context) {
+	if h.tasks == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "task service is unavailable"})
+		return
+	}
+	idValue, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || idValue == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task ID"})
+		return
+	}
+	var request updateTaskRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task update"})
+		return
+	}
+	if request.AssignedTo != nil && strings.TrimSpace(*request.AssignedTo) != "" {
+		resolved := resolveAssistantAssignee(*request.AssignedTo)
+		if resolved == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "choose an IT Team member from the list"})
+			return
+		}
+		request.AssignedTo = &resolved
+	}
+	task, err := h.tasks.Update(c.Request.Context(), uint(idValue), usecase.UpdateTaskInput{
+		Title: request.Title, Description: request.Description, CreatedBy: request.CreatedBy, AssignedTo: request.AssignedTo,
+		Priority: request.Priority, DueDate: request.DueDate, Status: request.Status,
+	})
+	if err != nil {
+		if err == domain.ErrNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+			return
+		}
+		writeTaskError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"task": toTaskView(task)})
+}
+
+func writeTaskError(c *gin.Context, err error) {
+	switch err {
+	case usecase.ErrTaskTitleRequired, usecase.ErrTaskTitleTooLong, usecase.ErrTaskDescriptionTooLong,
+		usecase.ErrTaskCreatorRequired, usecase.ErrTaskCreatorTooLong,
+		usecase.ErrTaskAssigneeTooLong, usecase.ErrTaskInvalidPriority, usecase.ErrTaskInvalidStatus,
+		usecase.ErrTaskInvalidDueDate, usecase.ErrTaskNoChanges:
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	default:
+		log.Printf("task save failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not save task"})
+	}
 }

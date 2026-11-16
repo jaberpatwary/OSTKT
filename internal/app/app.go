@@ -45,6 +45,10 @@ func Run(cfg config.Config) error {
 	if err := ticketRepository.Migrate(); err != nil {
 		return fmt.Errorf("migrate ticket schema: %w", err)
 	}
+	taskRepository := postgres.NewTaskRepository(db)
+	if err := taskRepository.Migrate(); err != nil {
+		return fmt.Errorf("migrate task schema: %w", err)
+	}
 
 	mailer := email.NewSender(cfg)
 	if mailer.Enabled() {
@@ -54,12 +58,13 @@ func Run(cfg config.Config) error {
 	}
 
 	ticketService := usecase.NewTicketService(ticketRepository, employees, mailer, location)
+	taskService := usecase.NewTaskService(taskRepository)
 	healthCheck := func(ctx context.Context) error {
 		return sqlDB.PingContext(ctx)
 	}
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpapi.NewRouter(ticketService, healthCheck, cfg),
+		Handler:           httpapi.NewRouter(ticketService, healthCheck, cfg, taskService),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

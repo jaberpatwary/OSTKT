@@ -179,7 +179,7 @@ func (s *TicketService) Assign(ctx context.Context, key, assignee string) (domai
 	return ticket, nil
 }
 
-func (s *TicketService) List(ctx context.Context, status string, limit int) ([]domain.Ticket, int64, error) {
+func (s *TicketService) List(ctx context.Context, status string, from, until time.Time, limit int) ([]domain.Ticket, int64, error) {
 	status = strings.ToLower(strings.TrimSpace(status))
 	if status != "" && status != domain.StatusDone && status != domain.StatusPending {
 		return nil, 0, ErrInvalidFilter
@@ -187,7 +187,7 @@ func (s *TicketService) List(ctx context.Context, status string, limit int) ([]d
 	if limit <= 0 || limit > MaxTicketLimit {
 		limit = 100
 	}
-	return s.repository.List(ctx, domain.TicketFilter{Status: status, Limit: limit})
+	return s.repository.List(ctx, domain.TicketFilter{Status: status, CreatedFrom: from, CreatedUntil: until, Limit: limit})
 }
 
 func (s *TicketService) queueEmail(ticket domain.Ticket) bool {

@@ -123,7 +123,7 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 	}
 	site.Use(func(c *gin.Context) {
 		path := c.Request.URL.Path
-		if path == "/" || path == "/dashboard" || path == "/admin" {
+		if path == "/" || path == "/dashboard" || path == "/admin" || path == "/admin/tasks" {
 			c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
 			c.Header("Pragma", "no-cache")
 		}
@@ -132,6 +132,7 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 	site.StaticFile("/", "./static/index.html")
 	site.StaticFile("/dashboard", "./static/index.html")
 	site.StaticFile("/admin", "./static/admin.html")
+	site.StaticFile("/admin/tasks", "./static/admin-tasks.html")
 	site.StaticFile("/theme.css", "./static/theme.css")
 	site.StaticFile("/premium.css", "./static/premium.css")
 	site.StaticFile("/theme.js", "./static/theme.js")

@@ -28,7 +28,7 @@
       <nav class="flex flex-wrap gap-2"><button id="themeToggle" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm hover:bg-slate-100" aria-pressed="false">🌙 Dark mode</button><a href="/" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm hover:bg-slate-100">← Ticket Form</a><a href="/dashboard" class="inline-flex items-center rounded-xl border border-cyan-200 bg-white px-4 py-2 font-semibold text-cyan-700 shadow-sm hover:bg-cyan-50">Dashboard</a></nav>
     </header>
 
-    <a href="/?view=tasks" class="admin-task-link"><span aria-hidden="true">✓</span> Open task board</a><section aria-label="Ticket summary" class="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <section aria-label="Ticket summary" class="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-3">
       <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <p class="text-sm text-slate-500">মোট টিকিট</p>
         <p id="totalCount" class="mt-1 text-3xl font-bold text-slate-900">—</p>
@@ -95,15 +95,7 @@
       <p class="border-t border-slate-100 px-4 py-3 text-xs text-slate-400">নিরাপত্তার জন্য এই তালিকায় কর্মীর email ও phone দেখানো হয় না।</p>
     </section>
 
-    <section aria-labelledby="adminTasksTitle" class="mt-7 overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm">
-      <div class="flex flex-col gap-3 border-b border-violet-100 bg-violet-50/70 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-        <div><p class="text-xs font-bold uppercase tracking-wider text-violet-700">Task administration</p><h2 id="adminTasksTitle" class="mt-1 text-xl font-bold text-slate-900">Manage tasks</h2><p id="adminTaskSummary" class="text-sm text-slate-500">Loading tasks…</p></div>
-        <div class="flex flex-col gap-2 sm:flex-row"><input id="adminTaskSearch" type="search" placeholder="Search task details or owner…" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" /><select id="adminTaskStatusFilter" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"><option value="">All statuses</option><option value="pending">Pending</option><option value="in_progress">In progress</option><option value="done">Done</option></select><button id="adminTaskRefresh" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2 font-semibold text-violet-800 hover:bg-violet-100">↻ Refresh</button></div>
-      </div>
-      <div id="adminTaskError" role="alert" class="hidden m-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800"></div>
-      <div class="overflow-x-auto"><table class="w-full min-w-[900px] text-left text-sm"><thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-3">Task details</th><th class="px-4 py-3">Given by</th><th class="px-4 py-3">Assign to</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Action</th></tr></thead><tbody id="adminPendingTasks" class="divide-y divide-slate-100"></tbody></table></div>
-      <p id="adminTaskEmpty" class="hidden px-4 py-8 text-center text-sm text-slate-400">No tasks match this filter.</p>
-    </section>
+
   </main>
 
   <script>
@@ -350,58 +342,12 @@
       }
     }
 
-    let adminTasks = [];
-    const taskOwners = ['Rupok Kumar Roy', 'Towhedul Islam', 'Md. Imam Hossan Chowdhury', 'Muhammad Fokhrul Hasan', 'Md. Tanvir Ahamed Sarkar', 'Md. Fahad Hossen', 'Mabubul Alam Patwary'];
-
-    function renderAdminTasks() {
-      const query = $('adminTaskSearch').value.trim().toLocaleLowerCase();
-      const status = $('adminTaskStatusFilter').value;
-      const visible = adminTasks.filter((task) => {
-        const text = [task.description, task.created_by, task.assigned_to].filter(Boolean).join(' ').toLocaleLowerCase();
-        return (!query || text.includes(query)) && (!status || task.status === status);
-      });
-      $('adminTaskSummary').textContent = `${number(visible.length)} shown · ${number(adminTasks.length)} total tasks`;
-      $('adminPendingTasks').replaceChildren(...visible.map((task) => {
-        const row = document.createElement('tr');
-        const detailsCell = document.createElement('td'); detailsCell.className = 'max-w-2xl whitespace-pre-wrap break-words px-4 py-3 text-slate-700'; detailsCell.textContent = task.description || 'No details';
-        const creatorCell = document.createElement('td'); creatorCell.className = 'px-4 py-3 text-slate-600'; creatorCell.textContent = task.created_by || '—';
-        const ownerCell = document.createElement('td'); ownerCell.className = 'px-4 py-3';
-        const owner = document.createElement('select'); owner.className = 'max-w-52 rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs';
-        owner.append(new Option('Unassigned', '')); taskOwners.forEach((name) => owner.append(new Option(name, name))); owner.value = task.assigned_to || ''; ownerCell.append(owner);
-        const statusCell = document.createElement('td'); statusCell.className = 'px-4 py-3';
-        const taskStatus = document.createElement('select'); taskStatus.className = 'rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs';
-        [['pending','Pending'],['in_progress','In progress'],['done','Done']].forEach(([value,label]) => taskStatus.append(new Option(label,value))); taskStatus.value = task.status || 'pending'; statusCell.append(taskStatus);
-        const actionCell = document.createElement('td'); actionCell.className = 'px-4 py-3';
-        const save = document.createElement('button'); save.type = 'button'; save.className = 'rounded-lg bg-violet-700 px-3 py-2 text-xs font-bold text-white hover:bg-violet-800'; save.textContent = 'Save';
-        save.addEventListener('click', async () => {
-          save.disabled = true; save.textContent = 'Saving…';
-          const update = await getJSON('/api/tasks/' + encodeURIComponent(task.id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assigned_to: owner.value, status: taskStatus.value }) });
-          if (!update.ok) { save.disabled = false; save.textContent = 'Retry'; $('adminTaskError').textContent = update.data.error || 'Task update failed.'; $('adminTaskError').classList.remove('hidden'); return; }
-          loadAdminTasks();
-        });
-        actionCell.append(save); row.append(detailsCell, creatorCell, ownerCell, statusCell, actionCell); return row;
-      }));
-      $('adminTaskEmpty').classList.toggle('hidden', visible.length > 0);
-    }
-    async function loadAdminTasks() {
-      const refreshTasks = $('adminTaskRefresh'); refreshTasks.disabled = true; $('adminTaskError').classList.add('hidden');
-      try {
-        const result = await getJSON('/api/tasks?limit=500');
-        if (!result.ok) throw new Error(result.data.error || 'Tasks could not be loaded.');
-        adminTasks = Array.isArray(result.data.tasks) ? result.data.tasks : [];
-        renderAdminTasks();
-      } catch (error) {
-        $('adminTaskError').textContent = error.message || 'Tasks could not be loaded.'; $('adminTaskError').classList.remove('hidden');
-      } finally { refreshTasks.disabled = false; }
-    }
     filter.addEventListener('change', render);
     search.addEventListener('input', render);
     dayFilter.addEventListener('change', loadTickets);
     refresh.addEventListener('click', loadTickets);
     dayFilter.value = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
-    $('adminTaskRefresh').addEventListener('click', loadAdminTasks);
     loadTickets();
-    loadAdminTasks();
   })();
   </script>
   <script src="/theme.js"></script>

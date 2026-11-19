@@ -159,7 +159,7 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 }
 
 func (h *Handler) assistantStatus(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"enabled": h.assistant.Enabled()})
+	c.JSON(http.StatusOK, gin.H{"enabled": true, "ai_enabled": h.assistant.Enabled()})
 }
 
 func (h *Handler) assistantTranscribe(c *gin.Context) {
@@ -301,6 +301,114 @@ func isAssistantRateLimited(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "HTTP 429")
 }
 
+// fallbackTicketDetails keeps chat usable when Groq is unavailable. It uses the
+// employee directory and the IT team list, while preserving the user's issue text.
+func fallbackTicketDetails(messages []groqapi.Message, employees []domain.Employee, assignees []string) groqapi.TicketDetails {
+	var text strings.Builder
+	for _, message := range messages {
+		if message.Role == "user" && !strings.HasPrefix(strings.ToLower(message.Content), "employee selected by user:") {
+			text.WriteByte(' ')
+			text.WriteString(message.Content)
+		}
+	}
+	all := strings.TrimSpace(text.String())
+	result := groqapi.TicketDetails{}
+	for _, employee := range employees {
+		name := strings.TrimSpace(employee.Name)
+		if name != "" && strings.Contains(strings.ToLower(all), strings.ToLower(name)) {
+			result.EmployeeName = name
+			break
+		}
+	}
+	if result.EmployeeName == "" {
+		matches := relevantAssistantEmployees(messages, employees, 2)
+		if len(matches) == 1 {
+			result.EmployeeName = matches[0].Name
+		}
+	}
+	result.Assignee = fallbackAssigneeFromText(all)
+	problem := all
+	if result.EmployeeName != "" {
+		problem = strings.ReplaceAll(problem, result.EmployeeName, "")
+	}
+	problem = regexp.MustCompile(`(?i)\bassign(?:ed)?\s*(?:to|by)?\s*[\pL.]+(?:\s+[\pL.]+){0,5}\s*$`).ReplaceAllString(problem, "")
+	problem = strings.TrimSpace(strings.Trim(problem, " ,:;.-"))
+	result.Problem = problem
+	return result
+}
+
+func fallbackAssigneeFromText(text string) string {
+	match := regexp.MustCompile(`(?i)(?:assign(?:ed|ee)?|assing|give)\s*(?:to|by)?\s*(.+)$`).FindStringSubmatch(text)
+	if len(match) < 2 {
+		if m := regexp.MustCompile(`(?i)([\pL.]+(?:\s+[\pL.]+){0,3})\s+ke\s+dao\s*$`).FindStringSubmatch(text); len(m) > 1 {
+			return resolveAssistantAssignee(m[1])
+		}
+		return ""
+	}
+	clause := strings.ToLower(match[1])
+	for _, assignee := range assistantAssignees {
+		if strings.Contains(clause, strings.ToLower(assignee)) {
+			return assignee
+		}
+	}
+	if strings.Contains(clause, "jaber") {
+		return resolveAssistantAssignee("jaber")
+	}
+	return ""
+}
+
+func fallbackTaskDetails(messages []groqapi.Message, selectedAssignee string) groqapi.TaskDetails {
+	var userText strings.Builder
+	createdBy, description := "", ""
+	askedForCreator, askedForDescription := false, false
+	creatorOnlyAnswer := false
+	for _, message := range messages {
+		content := strings.TrimSpace(message.Content)
+		lower := strings.ToLower(content)
+		if message.Role == "assistant" {
+			askedForCreator = strings.Contains(lower, "who gave") || strings.Contains(lower, "given by")
+			askedForDescription = strings.Contains(lower, "what needs to be done") || strings.Contains(lower, "task-এ কী কাজ")
+			if askedForDescription {
+				creatorOnlyAnswer = false
+			}
+			continue
+		}
+		if message.Role != "user" {
+			continue
+		}
+		userText.WriteByte(' ')
+		userText.WriteString(content)
+		if m := regexp.MustCompile(`(?i)(?:given\s*by|request(?:ed)?\s*by)\s*[:=]?\s*([\pL.]+(?:\s+[\pL.]+){0,3})`).FindStringSubmatch(content); len(m) > 1 {
+			createdBy = strings.TrimSpace(m[1])
+		} else if askedForCreator && !strings.Contains(lower, "assign") {
+			createdBy = content
+			creatorOnlyAnswer = true
+		}
+		if strings.Contains(lower, "task details:") {
+			description = strings.TrimSpace(content[strings.Index(lower, "task details:")+13:])
+			creatorOnlyAnswer = false
+		} else if askedForDescription {
+			description = content
+			creatorOnlyAnswer = false
+		}
+	}
+	all := userText.String()
+	if description == "" && !creatorOnlyAnswer {
+		description = regexp.MustCompile(`(?i)given\s*by\s*[:=]?\s*[\pL.]+(?:\s+[\pL.]+){0,3}[,.]?`).ReplaceAllString(all, " ")
+		description = regexp.MustCompile(`(?i)assign(?:ed)?\s*(?:to|by)?\s*[\pL.]+(?:\s+[\pL.]+){0,5}`).ReplaceAllString(description, " ")
+	}
+	description = strings.TrimSpace(strings.Trim(description, " ,:;.-"))
+	assignee := resolveAssistantAssignee(selectedAssignee)
+	if assignee == "" {
+		assignee = fallbackAssigneeFromText(all)
+	}
+	title := description
+	if len([]rune(title)) > 160 {
+		title = string([]rune(title)[:160])
+	}
+	return groqapi.TaskDetails{Title: title, Description: description, CreatedBy: createdBy, Assignee: assignee, Priority: "medium"}
+}
+
 func relevantAssistantEmployees(messages []groqapi.Message, employees []domain.Employee, limit int) []domain.Employee {
 	if limit <= 0 || len(employees) == 0 {
 		return nil
@@ -410,10 +518,6 @@ func assistantTokenSimilarity(left, right string) float64 {
 }
 
 func (h *Handler) assistantChat(c *gin.Context) {
-	if !h.assistant.Enabled() {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Groq API is not configured yet"})
-		return
-	}
 	if !h.allowAssistantRequest(c.ClientIP(), time.Now()) {
 		c.JSON(http.StatusTooManyRequests, gin.H{"error": "অনেকগুলো request হয়েছে। এক মিনিট পরে আবার চেষ্টা করুন।"})
 		return
@@ -449,16 +553,23 @@ func (h *Handler) assistantChat(c *gin.Context) {
 		return
 	}
 	employeeCandidates := relevantAssistantEmployees(request.Messages, h.tickets.ListEmployees(), 8)
-	details, err := h.assistant.ExtractTicket(c.Request.Context(), request.Messages, employeeCandidates, assistantAssignees)
-	if err != nil {
-		log.Printf("assistant extraction failed: %v", err)
-		if isAssistantRateLimited(err) {
-			c.Header("Retry-After", "60")
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Ticket assistant is busy right now. Please wait a minute and send your message again."})
-			return
+	var details groqapi.TicketDetails
+	if h.assistant.Enabled() {
+		var err error
+		details, err = h.assistant.ExtractTicket(c.Request.Context(), request.Messages, employeeCandidates, assistantAssignees)
+		if err != nil {
+			log.Printf("assistant extraction failed; using programming fallback: %v", err)
 		}
-		c.JSON(http.StatusBadGateway, gin.H{"error": "AI service could not process the request. Check Groq API settings and try again."})
-		return
+	}
+	fallback := fallbackTicketDetails(request.Messages, h.tickets.ListEmployees(), assistantAssignees)
+	if details.EmployeeName == "" {
+		details.EmployeeName = fallback.EmployeeName
+	}
+	if details.Problem == "" {
+		details.Problem = fallback.Problem
+	}
+	if details.Assignee == "" {
+		details.Assignee = fallback.Assignee
 	}
 	details.EmployeeName = strings.TrimSpace(details.EmployeeName)
 	details.Problem = strings.TrimSpace(details.Problem)
@@ -550,8 +661,8 @@ func (h *Handler) assistantChat(c *gin.Context) {
 }
 
 func (h *Handler) assistantTaskChat(c *gin.Context) {
-	if !h.assistant.Enabled() || h.tasks == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI task assistant is not configured"})
+	if h.tasks == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Task service is unavailable"})
 		return
 	}
 	if !h.allowAssistantRequest(c.ClientIP(), time.Now()) {
@@ -585,16 +696,26 @@ func (h *Handler) assistantTaskChat(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "conversation is too long or does not end with a user message"})
 		return
 	}
-	details, err := h.assistant.ExtractTask(c.Request.Context(), request.Messages, assistantAssignees)
-	if err != nil {
-		log.Printf("task assistant extraction failed: %v", err)
-		if isAssistantRateLimited(err) {
-			c.Header("Retry-After", "60")
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Task assistant is busy. Please wait a minute and try again."})
-			return
+	var details groqapi.TaskDetails
+	if h.assistant.Enabled() {
+		var err error
+		details, err = h.assistant.ExtractTask(c.Request.Context(), request.Messages, assistantAssignees)
+		if err != nil {
+			log.Printf("task assistant extraction failed; using programming fallback: %v", err)
 		}
-		c.JSON(http.StatusBadGateway, gin.H{"error": "AI service could not process the task. Try again."})
-		return
+	}
+	fallback := fallbackTaskDetails(request.Messages, request.SelectedAssignee)
+	if details.Title == "" {
+		details.Title = fallback.Title
+	}
+	if details.Description == "" {
+		details.Description = fallback.Description
+	}
+	if details.CreatedBy == "" {
+		details.CreatedBy = fallback.CreatedBy
+	}
+	if details.Assignee == "" {
+		details.Assignee = fallback.Assignee
 	}
 	details.Title = strings.TrimSpace(details.Title)
 	details.Description = strings.TrimSpace(details.Description)

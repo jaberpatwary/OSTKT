@@ -300,3 +300,14 @@ flowchart LR
 Business rules and ticket lifecycle live in the use case layer. The PostgreSQL/SQLite, Excel, SMTP, and Gin integrations sit in adapters, so those libraries do not define the business flow.
 
 The Admin Panel is available at `/admin`. Ticket creation accepts a required problem description and optional assignee. In the Admin Panel, the description is visible and the assignee can be changed or cleared. Both fields are saved in PostgreSQL.
+
+## Run with Docker Compose
+
+Copy `.env.example` to `.env` and set unique values for `APP_PASS` and `POSTGRES_PASSWORD` before starting. Keep the private employee workbook as `employees.xlsx` in the repository root; it is excluded from the Docker build and mounted read-only into the app container. Then run:
+
+```bash
+docker compose up --build -d
+docker compose ps
+```
+
+Open `http://localhost:18080` and sign in with the `APP_USER` and `APP_PASS` values from `.env`. PostgreSQL data is stored in the `ticket-postgres-data` named volume and survives container rebuilds. Stop the app with `docker compose down` (this keeps the database volume).

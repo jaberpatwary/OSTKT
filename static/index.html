@@ -92,8 +92,8 @@
       * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
   </style>
-  <link rel="stylesheet" href="/theme.css?v=20261117-production-polish1" />
-  <link rel="stylesheet" href="/premium.css?v=20261117-assistant-demo-fix1" />
+  <link rel="stylesheet" href="/theme.css?v=20261119-chat-expanded-fix1" />
+  <link rel="stylesheet" href="/premium.css?v=20261119-chat-expanded-fix2" />
 </head>
 
 <body class="min-h-screen bg-gradient-to-b from-blue-50 via-sky-50/50 to-white bg-fixed text-slate-800 antialiased">
@@ -435,6 +435,7 @@
 
     // ---------- DOM ----------
     const $ = (id) => document.getElementById(id);
+    const assistantPanelPlaceholder = document.createComment('assistant panel home');
     const el = {
       homeScreen: $('homeScreen'), resultScreen: $('resultScreen'),
       workspaceTabs: $('workspaceTabs'), ticketModeButton: $('ticketModeButton'), taskModeButton: $('taskModeButton'),
@@ -860,9 +861,9 @@
         ? 'assistant-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan-700 text-lg font-bold text-white hover:bg-cyan-800 disabled:cursor-wait disabled:opacity-60'
         : 'assistant-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-300 text-lg font-bold text-white';
       el.assistantStatus.textContent = assistantEnabled
-        ? (assistantTaskMode ? 'AI ready · create tasks by chat or voice.' : 'AI ready · create pending tickets by chat or voice.')
-        : 'AI service is not configured yet.';
-      el.assistantConnectionBadge.textContent = assistantEnabled ? 'AI connected' : 'AI সংযোগ নেই';
+        ? (assistantTaskMode ? 'Task assistant ready · create tasks by chat or voice.' : 'Ticket assistant ready · create pending tickets by chat or voice.')
+        : 'Assistant is unavailable.';
+      el.assistantConnectionBadge.textContent = assistantEnabled ? 'Chat ready' : 'Unavailable';
       el.assistantConnectionBadge.className = assistantEnabled
         ? 'shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700'
         : 'shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700';
@@ -1846,6 +1847,7 @@
     const taskStatusNames = { pending: 'Pending', in_progress: 'In progress', done: 'Done' };
 
     function setAssistantWorkspace(tasksMode) {
+      if (el.assistantPanel.classList.contains('assistant-panel-fullscreen')) el.assistantExpand.click();
       assistantTaskMode = tasksMode;
       if (tasksMode) el.taskAssistantDock.append(el.assistantDemo, el.assistantPanel);
       else el.pendingPanel.after(el.assistantDemo, el.assistantPanel);
@@ -2226,7 +2228,12 @@
     el.assistantExpand.addEventListener('click', () => {
       const panel = el.assistantExpand.closest('.assistant-panel');
       const expanded = panel.classList.toggle('assistant-panel-fullscreen');
-      document.body.classList.toggle('assistant-chat-expanded', expanded);
+      if (expanded) {
+        panel.before(assistantPanelPlaceholder);
+        document.body.append(panel);
+      } else if (assistantPanelPlaceholder.parentNode) {
+        assistantPanelPlaceholder.replaceWith(panel);
+      }
       el.assistantExpand.textContent = expanded ? '×' : '⛶';
       el.assistantExpand.setAttribute('aria-label', expanded ? 'Exit expanded chat' : 'Expand chat');
       el.assistantExpand.title = expanded ? 'Exit expanded chat' : 'Expand chat';

@@ -686,3 +686,37 @@ html.dark .task-entry-section > .task-form-card { background:transparent; }
   .task-dashboard-section .task-analytics-grid, .task-dashboard-section .task-list { grid-template-columns:1fr; }
   .task-entry-section { padding:21px; }
 }
+
+/* Expanded ticket and task chat share one layout; the dashboard stays visible beside it. */
+.assistant-panel.assistant-panel-fullscreen {
+  position: fixed !important;
+  inset: 16px 16px 16px auto !important;
+  z-index: 100 !important;
+  display: flex !important;
+  width: min(35rem, calc(100vw - 32px)) !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border-radius: 24px !important;
+  box-shadow: 0 24px 80px rgba(4, 10, 24, .62) !important;
+}
+.assistant-panel.assistant-panel-fullscreen #assistantMessages {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+.assistant-panel.assistant-panel-fullscreen .assistant-composer {
+  flex: 0 1 auto !important;
+  max-height: 48vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-width: 680px) {
+  .assistant-panel.assistant-panel-fullscreen {
+    inset: 0 !important;
+    width: 100vw !important;
+    border-radius: 0 !important;
+  }
+}

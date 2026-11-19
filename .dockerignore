@@ -1,0 +1,8 @@
+.git
+.env
+employees.xlsx
+*.db
+*.db-shm
+*.db-wal
+.chatbot-context*.exe
+dist

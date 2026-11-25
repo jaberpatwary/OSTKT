@@ -12,13 +12,13 @@ The `Jenkinsfile` runs the Go test suite, `go vet`, and a Linux amd64 production
 
 ## Run Jenkins with Docker Compose
 
-The repository includes a Jenkins container with Go and the Pipeline, Git, and Credentials Binding plugins. Start it with:
+The repository includes a Jenkins container with Go and the Pipeline, Git, and Credentials Binding plugins. Set `JENKINS_ADMIN_ID` and `JENKINS_ADMIN_PASSWORD` in the ignored `.env` file; a one-time startup script uses them for the initial login. The host ports bind to localhost. Start it with:
 
 ```bash
 docker compose up --build -d jenkins
 docker compose ps jenkins
 ```
 
-Open `http://localhost:18081`. To get the first-run unlock password, run `docker compose exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword`. Jenkins configuration persists in the `jenkins-home` volume.
+Open `http://localhost:18081` and sign in with the username and password from `.env`. Jenkins configuration persists in the `jenkins-home` volume.
 
 The Deploy stage requires the Jenkins credential above. Other branches run CI and publish the build artifact without deploying.

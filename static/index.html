@@ -61,9 +61,9 @@
       * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
   </style>
-  <link rel="stylesheet" href="/theme.css?v=20261126-full-redesign5" />
-  <link rel="stylesheet" href="/premium.css?v=20261126-full-redesign5" />
-  <link rel="stylesheet" href="/experience.css?v=20261126-full-redesign5" />
+  <link rel="stylesheet" href="/theme.css?v=20261126-full-redesign7" />
+  <link rel="stylesheet" href="/premium.css?v=20261126-full-redesign7" />
+  <link rel="stylesheet" href="/experience.css?v=20261126-full-redesign7" />
 </head>
 
 <body class="min-h-screen bg-gradient-to-b from-blue-50 via-sky-50/50 to-white bg-fixed text-slate-800 antialiased">
@@ -90,6 +90,7 @@
         <header class="task-page-header">
           <div><p class="task-eyebrow">TEAM EXECUTION</p><h1 id="taskWorkspaceTitle">Task board</h1><p>Plan work, assign an owner, and keep progress visible.</p></div>
           <div class="task-page-actions">
+            <button id="taskCreateOpenButton" type="button" class="task-header-button">＋ New task</button>
             <a href="/admin/tasks" class="task-header-button">Task Admin ↗</a>
             <button id="taskThemeToggle" type="button" class="task-header-button" data-theme-toggle aria-pressed="false">🌙 Dark mode</button>
             <button id="taskAssistantOpenButton" type="button" class="task-ai-shortcut">✦ Chat or speak a task</button>
@@ -103,19 +104,25 @@
           <article><span>Completed</span><strong id="taskDoneCount">0</strong><small>Marked done</small></article>
           <article><span>Created today</span><strong id="taskTodayCount">0</strong><small>New work today</small></article>
         </div>
-        <section class="task-analytics" aria-label="Task analytics">
+        <details class="task-analytics" aria-label="Task analytics">
+          <summary class="task-analytics-summary"><span><strong>Work analytics</strong><small>Charts and trends · open when needed</small></span><span class="task-analytics-chevron" aria-hidden="true">⌄</span></summary>
           <div class="task-analytics-toolbar"><div><p class="task-eyebrow">WORK ANALYTICS</p><p id="taskAnalyticsHint">Latest 90 days · task activity and ownership</p></div><label class="sr-only" for="taskAnalyticsRange">Task analytics date range</label><select id="taskAnalyticsRange"><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="365">Last 12 months</option><option value="all">All available</option></select></div>
           <div class="task-analytics-grid">
             <article class="task-analytics-card"><div><h2>Task status</h2><p>Progress in the selected range</p></div><div id="taskStatusChart" class="task-status-chart" aria-live="polite"></div></article>
             <article class="task-analytics-card"><div><h2>Active work by owner</h2><p>Pending and in-progress tasks</p></div><div id="taskOwnerChart" class="task-breakdown-chart" aria-live="polite"></div></article>
             <article class="task-analytics-card task-trend-card"><div><h2>Work created over time</h2><p>Monthly tasks · latest 6 months</p></div><div id="taskTrendChart" class="task-trend-chart" aria-live="polite"></div></article>
           </div>
-        </section>
+        </details>
         <div class="task-workspace-grid">
           <form id="taskForm" class="task-form-card">
             <div class="task-form-heading"><span class="task-form-icon">＋</span><div><h2 id="taskFormTitle">Create a task</h2><p>Capture a piece of work and give it an owner.</p></div></div>
+            <p class="task-form-help">Given by = যিনি কাজটি দিয়েছেন। Assign to = যিনি কাজটি করবেন। নাম তালিকায় না থাকলে “Someone else…” বেছে নাম লিখুন।</p>
             <label for="taskCreatedByInput">Given by <span>*</span></label>
-            <select id="taskCreatedByInput" required><option value="">Select who gave this task</option><option>Rupok Kumar Roy</option><option>Towhedul Islam</option><option>Md. Imam Hossan Chowdhury</option><option>Muhammad Fokhrul Hasan</option><option>Md. Tanvir Ahamed Sarkar</option><option>Md. Fahad Hossen</option><option>Mabubul Alam Patwary</option></select>
+            <select id="taskCreatedByInput" required><option value="">Select who gave this task</option><option>Rupok Kumar Roy</option><option>Towhedul Islam</option><option>Md. Imam Hossan Chowdhury</option><option>Muhammad Fokhrul Hasan</option><option>Md. Tanvir Ahamed Sarkar</option><option>Md. Fahad Hossen</option><option>Mabubul Alam Patwary</option><option value="__other__">Someone else…</option></select>
+            <div id="taskCreatorCustomWrap" class="hidden flex flex-col gap-2">
+              <label class="text-xs font-bold text-slate-700" for="taskCreatorCustomInput">Requester name <span class="text-rose-500">*</span></label>
+              <input id="taskCreatorCustomInput" type="text" maxlength="100" autocomplete="name" placeholder="Type the requester's name" />
+            </div>
             <label for="taskDescriptionInput">Task details <span>*</span></label>
             <textarea id="taskDescriptionInput" rows="5" maxlength="2000" placeholder="Describe the work to do…" required></textarea>
             <label for="taskAssigneeInput">Assign to <small>Optional</small></label>
@@ -124,7 +131,7 @@
             <div class="task-form-actions"><button id="taskSubmitButton" type="submit" class="task-primary-button">Create task</button><button id="taskCancelEditButton" type="button" class="premium-secondary-button hidden">Cancel edit</button></div>
           </form>
           <section class="task-list-card" aria-labelledby="taskListTitle">
-            <div class="task-list-header"><div><p class="task-eyebrow">WORK QUEUE</p><h2 id="taskListTitle">Pending tasks</h2><p id="taskListSummary" aria-live="polite">Loading pending tasks…</p></div><div class="task-filters"><label class="sr-only" for="taskSearchInput">Search pending tasks</label><input id="taskSearchInput" type="search" placeholder="Search pending task details or owner…" /></div></div>
+            <div class="task-list-header"><div><p class="task-eyebrow">WORK QUEUE</p><h2 id="taskListTitle">Pending tasks</h2><p id="taskListSummary" aria-live="polite">Loading pending tasks…</p></div><div class="task-filters"><label class="sr-only" for="taskSearchInput">Search pending tasks</label><input id="taskSearchInput" type="search" placeholder="Search details, given by, owner, or ID…" /><button id="taskClearSearchButton" type="button" class="hidden shrink-0 text-xs font-bold text-violet-700 hover:underline">Clear</button></div></div>
             <div id="taskList" class="task-list" aria-live="polite"></div>
             <div id="taskEmptyState" class="task-empty-state hidden"><span>✓</span><h3>No pending tasks found</h3><p>New pending tasks will appear here.</p></div>
             <p id="taskLoadError" class="task-form-error hidden" role="alert"></p>
@@ -186,11 +193,16 @@
           </article>
         </section>
 
-        <div class="mt-4 grid gap-4 2xl:grid-cols-6">
+        <details class="dashboard-analytics-disclosure mt-4">
+          <summary><span><strong>Ticket analytics</strong><small>Charts and long-term trends · open when needed</small></span><span class="dashboard-analytics-chevron" aria-hidden="true">⌄</span></summary>
+          <div class="mt-4 grid gap-4 2xl:grid-cols-6">
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-2"><div class="flex items-start justify-between"><div><h3 class="font-bold text-slate-800">Support status</h3><p class="text-xs text-slate-400">Resolved vs open tickets</p></div><span id="dashCompletionRate" class="rounded-full bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700">—</span></div><div class="mt-3 flex items-center justify-center gap-4"><svg id="statusDonut" viewBox="0 0 160 160" class="h-40 w-40 -rotate-90" role="img" aria-label="Ticket status distribution"><circle cx="80" cy="80" r="58" fill="none" stroke="#e2e8f0" stroke-width="22"/><circle id="donutDone" cx="80" cy="80" r="58" fill="none" stroke="#18a66a" stroke-width="22" stroke-dasharray="0 365"/><circle id="donutPending" cx="80" cy="80" r="58" fill="none" stroke="#f4ad28" stroke-width="22" stroke-dasharray="0 365" stroke-dashoffset="-365"/></svg><div class="space-y-3 text-xs"><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Resolved <strong id="donutDoneLabel" class="ml-1 text-slate-800">—</strong></p><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-amber-400"></span>Open <strong id="donutPendingLabel" class="ml-1 text-slate-800">—</strong></p><p><span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-slate-200"></span>Total <strong id="donutTotalLabel" class="ml-1 text-slate-800">—</strong></p></div></div><div class="h-2 overflow-hidden rounded-full bg-slate-100"><div id="dashboardProgress" class="h-full rounded-full bg-emerald-500 transition-all" style="width:0%"></div></div></section>
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-2"><div class="flex flex-wrap items-start justify-between gap-2"><div><h3 class="font-bold text-slate-800">Tickets by issue type</h3><p class="text-xs text-slate-400">Open and resolved volume</p></div><div class="flex gap-2 text-[10px]"><span class="text-emerald-600">● Resolved</span><span class="text-cyan-600">● Open</span></div></div><div id="issueTypeChart" class="mt-4 space-y-3" aria-label="Ticket issue type chart"></div></section>
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-2"><div><h3 class="font-bold text-slate-800">Resolved by category</h3><p class="text-xs text-slate-400">Top recurring categories</p></div><div id="categoryChart" class="mt-4 flex h-44 items-end justify-around gap-2 border-b border-slate-100 pb-1" aria-label="Resolved ticket categories"></div></section>
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-6"><div class="flex flex-wrap items-start justify-between gap-3"><div><h3 class="font-bold text-slate-800">Monthly ticket volume by current status</h3><p class="text-xs text-slate-400">Tickets created in each month · 12 months · all range</p></div><div class="flex gap-4 text-xs"><span class="text-amber-600">● Resolved</span><span class="text-cyan-700">● Open</span></div></div><div id="monthlyChart" class="mt-3 overflow-hidden" aria-label="Monthly ticket trend"></div></section>
+          </div>
+        </details>
+        <div class="mt-4 grid gap-4 2xl:grid-cols-6">
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-3"><div><h3 class="font-bold text-slate-800">Pending by assignee</h3><p class="text-xs text-slate-400">নাম বা Pending count-এ click করে কাজগুলো দেখুন</p></div><div id="assigneeWorkload" class="mt-4 space-y-2"></div></section>
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-3"><div class="flex flex-wrap items-center justify-between gap-2"><div><h3 class="font-bold text-slate-800">Recent tickets</h3><p id="recentTicketCount" class="text-xs text-slate-400">Latest support requests and assignees</p></div><div class="flex items-center gap-3"><button id="clearTicketFilters" type="button" class="hidden text-xs font-semibold text-rose-600 hover:underline">Clear filters</button><a href="/admin" class="text-xs font-semibold text-blue-700 hover:underline">Ticket manager →</a></div></div><ul id="dashboardRecent" class="mt-2 divide-y divide-slate-100"></ul><p id="dashboardEmpty" class="hidden py-6 text-center text-sm text-slate-400">এখনো কোনো টিকিট নেই</p></section>
         </div>
@@ -302,13 +314,13 @@
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-600 to-blue-600 text-xl text-white shadow-md" aria-hidden="true">✦</span>
           <div class="min-w-0"><h2 id="ticketAssistantTitle" class="truncate font-bold text-slate-900">Ticket Assistant</h2><p class="text-xs text-slate-500">কর্মীর নাম → সমস্যা → assign by নাম</p></div>
           </div>
-          <span id="assistantConnectionBadge" class="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700">AI সংযোগ নেই</span>
+          <span id="assistantConnectionBadge" class="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700">Chat connecting…</span>
           <button id="assistantExpand" type="button" class="shrink-0 rounded-xl border border-cyan-200 bg-white/80 px-2.5 py-2 text-sm text-slate-600 hover:bg-white" aria-label="Expand chat" title="Expand chat">⛶</button>
         </header>
 
           <div id="assistantMessages" class="assistant-messages max-h-80 space-y-3 overflow-y-auto bg-slate-50/70 p-4 sm:p-5" aria-live="polite" aria-label="Ticket assistant conversation">
           <div class="flex justify-start"><p class="max-w-[92%] rounded-2xl rounded-tl-md border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed text-slate-700 shadow-sm">হ্যালো! কর্মীর নাম ও সমস্যাটা লিখুন। যেমন: “Sumaiya-এর PC চালু হচ্ছে না, assign Rupok-কে।”</p></div>
-          <div id="assistantPreviewNotice" class="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">AI service server-এ সেট হলে chat থেকে Pending ticket তৈরি হবে।</div>
+          <div id="assistantPreviewNotice" class="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">Checking chat and voice availability…</div>
         </div>
 
           <div class="assistant-composer border-t border-slate-100 bg-white p-4 sm:p-5">
@@ -321,7 +333,7 @@
           <div class="assistant-compose-bar flex items-end gap-2 rounded-full border border-slate-200 bg-white p-2 shadow-sm focus-within:border-cyan-400 focus-within:ring-4 focus-within:ring-cyan-500/10">
             <button id="assistantExamplesToggle" type="button" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-2xl text-slate-500 hover:bg-slate-100" aria-label="Show examples" aria-expanded="false" title="Show examples">＋</button>
             <textarea id="assistantInput" rows="1" maxlength="1200" placeholder="Ask Ticket Assistant…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="max-h-28 min-h-10 flex-1 resize-y border-0 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-slate-400" aria-describedby="assistantStatus"></textarea>
-            <button id="assistantSend" type="button" disabled title="AI service সংযোগ হলে চালু হবে" class="assistant-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-300 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" aria-label="Send message">↑</button>
+            <button id="assistantSend" type="button" disabled title="Checking chat service…" class="assistant-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-300 text-lg font-bold text-white disabled:cursor-wait disabled:opacity-50" aria-label="Send message">↑</button>
           </div>
           <div class="mt-2 flex items-center justify-between gap-2">
             <button id="assistantMic" type="button" class="assistant-icon-button rounded-full border border-slate-200 bg-white text-lg text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Start voice chat" title="Start voice chat">🎙️ Speak</button>
@@ -339,20 +351,20 @@
           <div class="mt-2 flex items-center gap-2 text-[11px] text-slate-500">
             <label for="assistantVoiceLanguage" class="shrink-0">Voice language</label>
             <select id="assistantVoiceLanguage" class="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700" aria-label="Voice recognition language">
-              <option value="auto">Auto detect</option>
+              <option value="auto">Auto detect (Bengali fallback)</option>
               <option value="bn">বাংলা</option>
               <option value="en">English</option>
             </select>
           </div>
           </details>
-          <div class="mt-1 text-center text-[10px] text-slate-400">আপনার voice message AI দিয়ে text-এ রূপান্তর করে assistant-এ পাঠানো হবে।</div>
+          <div id="assistantVoiceNote" class="mt-1 text-center text-[10px] text-slate-400">Checking voice input options…</div>
           <div id="assistantEmployeeOptions" class="mt-2 hidden max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg" role="listbox" aria-label="Employee suggestions"></div>
           <div id="assistantAssigneeOptions" class="mt-2 hidden max-h-48 overflow-y-auto rounded-xl border border-violet-200 bg-white p-1 shadow-lg" role="listbox" aria-label="IT assignee suggestions"></div>
           <div id="assistantSelectedPerson" class="mt-2 hidden items-center justify-between gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-900">
             <span id="assistantSelectedPersonLabel" class="min-w-0 truncate font-semibold"></span>
             <button id="assistantClearPerson" type="button" class="shrink-0 rounded-lg px-2 py-1 font-semibold text-cyan-700 hover:bg-cyan-100">Remove</button>
           </div>
-          <p id="assistantStatus" class="mt-2 text-center text-[10px] text-slate-400">AI service যুক্ত হলে message পাঠানো ও ticket তৈরি চালু হবে</p>
+          <p id="assistantStatus" class="mt-2 text-center text-[10px] text-slate-400">Connecting to chat service…</p>
         </div>
       </section>
       </section>
@@ -416,8 +428,9 @@
       assistantDemoFlow: $('assistantDemoFlow'), assistantDemoMessage: $('assistantDemoMessage'), assistantDemoUse: $('assistantDemoUse'),
       assistantSubtitle: $('ticketAssistantTitle').parentElement.querySelector('p'),
       taskFormTitle: $('taskFormTitle'), taskCancelEditButton: $('taskCancelEditButton'), taskFormError: $('taskFormError'),
-      taskSearchInput: $('taskSearchInput'), taskAnalyticsRange: $('taskAnalyticsRange'), taskRefreshButton: $('taskRefreshButton'),
-      taskAssistantOpenButton: $('taskAssistantOpenButton'),
+      taskCreatedByInput: $('taskCreatedByInput'), taskCreatorCustomWrap: $('taskCreatorCustomWrap'), taskCreatorCustomInput: $('taskCreatorCustomInput'),
+      taskSearchInput: $('taskSearchInput'), taskClearSearchButton: $('taskClearSearchButton'), taskAnalyticsRange: $('taskAnalyticsRange'), taskRefreshButton: $('taskRefreshButton'),
+      taskAssistantOpenButton: $('taskAssistantOpenButton'), taskCreateOpenButton: $('taskCreateOpenButton'),
       taskList: $('taskList'), taskListSummary: $('taskListSummary'), taskEmptyState: $('taskEmptyState'), taskLoadError: $('taskLoadError'),
       taskTotalCount: $('taskTotalCount'), taskPendingCount: $('taskPendingCount'), taskInProgressCount: $('taskInProgressCount'), taskDoneCount: $('taskDoneCount'), taskTodayCount: $('taskTodayCount'),
       taskAnalyticsHint: $('taskAnalyticsHint'), taskStatusChart: $('taskStatusChart'), taskOwnerChart: $('taskOwnerChart'), taskTrendChart: $('taskTrendChart'),
@@ -432,6 +445,7 @@
       pendingPanel: $('pendingPanel'), pendingCount: $('pendingCount'), pendingList: $('pendingList'),
       assistantInput: $('assistantInput'), assistantStatus: $('assistantStatus'),
       assistantMic: $('assistantMic'), assistantSpeakToggle: $('assistantSpeakToggle'), assistantExpand: $('assistantExpand'),
+      assistantVoiceNote: $('assistantVoiceNote'),
       assistantExamples: $('assistantExamples'), assistantExamplesToggle: $('assistantExamplesToggle'),
       assistantMicDevice: $('assistantMicDevice'), assistantMicRefresh: $('assistantMicRefresh'), assistantVoiceLanguage: $('assistantVoiceLanguage'),
       assistantMessages: $('assistantMessages'), assistantSend: $('assistantSend'), assistantPreviewNotice: $('assistantPreviewNotice'),
@@ -486,7 +500,8 @@
     const assistantPromptDefaults = [...document.querySelectorAll('[data-assistant-prompt]')].map((button) => ({ prompt: button.dataset.assistantPrompt, label: button.textContent }));
     const assistantMicControls = el.assistantMic.parentElement;
     assistantMicControls.before(el.assistantEmployeeOptions, el.assistantAssigneeOptions, el.assistantSelectedPerson);
-    el.assistantMic.disabled = !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder || !window.AudioContext;
+    const browserSpeechRecognitionAvailable = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+    el.assistantMic.disabled = !browserSpeechRecognitionAvailable && (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder || !window.AudioContext);
     if (el.assistantMic.disabled) el.assistantMic.title = 'Microphone recording is not supported in this browser';
     const assistantComposerRow = el.assistantInput.parentElement;
     const oldAssistantVoiceToolbar = el.assistantMic.parentElement;
@@ -527,7 +542,10 @@
     let assistantAudioFrame = 0;
     let assistantVoiceCancelled = false;
     let assistantManualStop = false;
+    let assistantSpeechRecognition = null;
     let assistantEnabled = false;
+    let assistantAIEnabled = false;
+    let assistantBrowserVoiceFallback = false;
     let assistantTaskMode = false;
     let assistantRequestActive = false;
     let assistantSelectedEmployeeID = '';
@@ -824,21 +842,41 @@
       try {
         const { ok, data } = await api('/api/assistant/status');
         assistantEnabled = ok && data.enabled === true;
+        assistantAIEnabled = ok && data.ai_enabled === true;
+        assistantBrowserVoiceFallback = !assistantAIEnabled;
       } catch (_) {
         assistantEnabled = false;
+        assistantAIEnabled = false;
+        assistantBrowserVoiceFallback = false;
       }
+      await refreshAssistantMicDevices();
       el.assistantSend.disabled = !assistantEnabled;
+      el.assistantMic.disabled = !assistantEnabled || (!assistantAIEnabled && !browserSpeechRecognitionAvailable) || (assistantAIEnabled && (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder || !window.AudioContext));
+        el.assistantVoiceNote.textContent = assistantAIEnabled
+        ? 'Voice is transcribed by the configured AI service. Choose a microphone and language below.'
+        : browserSpeechRecognitionAvailable
+          ? 'Chrome speech service uses your Windows default microphone; Auto uses Bengali. Choose English for English speech.'
+          : 'Voice input is unavailable here. Text chat still works; connect an AI speech service to enable voice.';
         el.assistantSend.className = assistantEnabled
         ? 'assistant-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan-700 text-lg font-bold text-white hover:bg-cyan-800 disabled:cursor-wait disabled:opacity-60'
         : 'assistant-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-300 text-lg font-bold text-white';
       el.assistantStatus.textContent = assistantEnabled
-        ? (assistantTaskMode ? 'Task assistant ready · create tasks by chat or voice.' : 'Ticket assistant ready · create pending tickets by chat or voice.')
-        : 'Assistant is unavailable.';
-      el.assistantConnectionBadge.textContent = assistantEnabled ? 'Chat ready' : 'Unavailable';
+        ? assistantAIEnabled
+          ? (assistantTaskMode ? 'AI chat ready · create tasks by text or voice.' : 'AI chat ready · create pending tickets by text or voice.')
+          : (browserSpeechRecognitionAvailable
+            ? 'Built-in chat ready · voice uses Chrome speech service and the Windows default microphone.'
+            : 'Built-in text chat ready · connect an AI speech service to use voice.')
+        : 'Chat service is unavailable. Check the app connection and refresh.';
+      el.assistantConnectionBadge.textContent = assistantEnabled ? (assistantAIEnabled ? 'AI + chat' : 'Local chat') : 'Unavailable';
       el.assistantConnectionBadge.className = assistantEnabled
         ? 'shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700'
         : 'shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700';
-      el.assistantPreviewNotice.classList.toggle('hidden', assistantEnabled);
+      el.assistantPreviewNotice.textContent = assistantAIEnabled
+        ? ''
+        : browserSpeechRecognitionAvailable
+          ? 'Text chat uses the built-in parser when AI is unavailable. Voice uses Chrome speech service and your Windows default microphone.'
+          : 'Text chat uses the built-in parser when AI is unavailable. Voice needs the AI speech service; text chat still works.';
+      el.assistantPreviewNotice.classList.toggle('hidden', !assistantEnabled || assistantAIEnabled);
       el.assistantSend.textContent = '↑';
     }
 
@@ -951,6 +989,11 @@
     function stopAssistantAudioInput() {
       assistantVoiceCancelled = true;
       assistantManualStop = false;
+      if (assistantSpeechRecognition) {
+        const recognition = assistantSpeechRecognition;
+        assistantSpeechRecognition = null;
+        try { recognition.abort(); } catch (_) {}
+      }
       if (assistantAudioFrame) cancelAnimationFrame(assistantAudioFrame);
       assistantAudioFrame = 0;
       if (assistantMediaRecorder?.state === 'recording') assistantMediaRecorder.stop();
@@ -962,6 +1005,12 @@
     }
 
     async function refreshAssistantMicDevices() {
+      if ((!assistantAIEnabled || assistantBrowserVoiceFallback) && browserSpeechRecognitionAvailable) {
+        el.assistantMicDevice.replaceChildren(new Option('Chrome default microphone', ''));
+        el.assistantMicDevice.disabled = true;
+        el.assistantMicDevice.title = 'Chrome speech recognition uses the default microphone selected in Windows';
+        return 1;
+      }
       if (!navigator.mediaDevices?.enumerateDevices) return 0;
       try {
         const previous = el.assistantMicDevice.value;
@@ -990,8 +1039,82 @@
       }
     }
 
+    function startBrowserSpeechInput() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        assistantVoiceMode = false;
+        el.assistantMic.setAttribute('aria-pressed', 'false');
+        el.assistantMic.textContent = '🎙️';
+        el.assistantStatus.textContent = 'Browser speech recognition is unavailable. Text chat still works; configure the AI speech service for voice.';
+        return;
+      }
+      const recognition = new SpeechRecognition();
+      const selectedLanguage = el.assistantVoiceLanguage.value;
+      recognition.lang = selectedLanguage === 'en' ? 'en-US' : 'bn-BD';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      assistantSpeechRecognition = recognition;
+      let receivedTranscript = false;
+      recognition.onstart = () => {
+        el.assistantStatus.textContent = 'Chrome is listening. Speak one request; it will be sent automatically.';
+        el.assistantMic.textContent = '⏹️';
+      };
+      recognition.onresult = (event) => {
+        if (receivedTranscript) return;
+        const transcript = Array.from(event.results || []).map((result) => result[0]?.transcript || '').join(' ').trim();
+        if (!/[\p{L}\p{N}]/u.test(transcript)) return;
+        receivedTranscript = true;
+        assistantVoiceMode = false;
+        assistantSpeechRecognition = null;
+        el.assistantMic.setAttribute('aria-pressed', 'false');
+        el.assistantMic.textContent = '🎙️';
+        el.assistantMic.title = 'Speak a request';
+        el.assistantInput.value = transcript;
+        el.assistantInput.dispatchEvent(new Event('input', { bubbles: true }));
+        el.assistantStatus.textContent = `Heard: “${transcript}” · sending…`;
+        sendAssistantMessage(transcript);
+      };
+      recognition.onerror = (event) => {
+        if (event.error === 'aborted' || !assistantVoiceMode) return;
+        assistantVoiceMode = false;
+        assistantSpeechRecognition = null;
+        el.assistantMic.setAttribute('aria-pressed', 'false');
+        el.assistantMic.textContent = '🎙️';
+        const messages = {
+          'not-allowed': 'Allow microphone access for this site in Chrome, then try again.',
+          'service-not-allowed': 'Chrome speech recognition is blocked. Check Chrome microphone and speech settings.',
+          'no-speech': 'No speech was heard. Check your default microphone and try again.',
+          network: 'Chrome speech recognition needs an internet connection. You can still use text chat.',
+        };
+        el.assistantStatus.textContent = messages[event.error] || `Speech recognition stopped (${event.error || 'unknown error'}). Try again or use text chat.`;
+      };
+      recognition.onend = () => {
+        if (assistantSpeechRecognition !== recognition) return;
+        assistantSpeechRecognition = null;
+        if (!assistantVoiceMode) return;
+        assistantVoiceMode = false;
+        el.assistantMic.setAttribute('aria-pressed', 'false');
+        el.assistantMic.textContent = '🎙️';
+        if (!receivedTranscript) el.assistantStatus.textContent = 'No speech was heard. Check your default microphone and try again.';
+      };
+      try {
+        recognition.start();
+      } catch (error) {
+        assistantSpeechRecognition = null;
+        assistantVoiceMode = false;
+        el.assistantMic.setAttribute('aria-pressed', 'false');
+        el.assistantMic.textContent = '🎙️';
+        el.assistantStatus.textContent = error.message || 'Chrome could not start speech recognition. Try again or use text chat.';
+      }
+    }
+
     async function startAssistantAudioInput() {
       if (!assistantVoiceMode || assistantMediaRecorder) return;
+      if (assistantEnabled && (!assistantAIEnabled || assistantBrowserVoiceFallback)) {
+        startBrowserSpeechInput();
+        return;
+      }
       if (!assistantEnabled) {
         assistantVoiceMode = false;
         el.assistantMic.textContent = '🎙️';
@@ -1079,7 +1202,19 @@
             form.append('language', el.assistantVoiceLanguage.value || 'auto');
             const response = await fetch('/api/assistant/transcribe', { method: 'POST', body: form, cache: 'no-store' });
             const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.error || `Transcription failed (${response.status})`);
+            if (!response.ok) {
+              if ([401, 402, 403, 429, 500, 502, 503].includes(response.status) && browserSpeechRecognitionAvailable) {
+                assistantBrowserVoiceFallback = true;
+                await refreshAssistantMicDevices();
+                el.assistantVoiceNote.textContent = 'AI voice service did not respond. Chrome speech service now uses the Windows default microphone.';
+                el.assistantPreviewNotice.textContent = 'AI voice transcription is unavailable, so voice input switched to Chrome speech service. Your chat and ticket/task creation remain available.';
+                el.assistantPreviewNotice.classList.remove('hidden');
+                el.assistantStatus.textContent = 'Voice service unavailable. Please say that request again; Chrome will recognize it and send it automatically.';
+                startBrowserSpeechInput();
+                return;
+              }
+              throw new Error(data.error || `Transcription failed (${response.status})`);
+            }
             if (!assistantVoiceMode) return;
             const transcript = String(data.text || '').trim();
             if (!/[\p{L}\p{N}]/u.test(transcript)) throw new Error('কথা শোনা যায়নি। আসল microphone বেছে নিয়ে আবার বলুন।');
@@ -1853,10 +1988,12 @@
         ? 'Given by → task details → assign to'
         : 'Employee name → problem → assign by name';
       el.assistantInput.placeholder = tasksMode ? 'First, who gave this task?…' : 'Ask Ticket Assistant…';
-      el.assistantPreviewNotice.textContent = tasksMode
-        ? 'Start with who gave the task, then describe the work, then choose who to assign it to.'
-        : 'AI service server-এ set হলে chat থেকে Pending ticket তৈরি হবে।';
-      el.assistantPreviewNotice.classList.toggle('hidden', assistantEnabled);
+      el.assistantPreviewNotice.textContent = assistantAIEnabled
+        ? ''
+        : tasksMode
+          ? 'Text chat works with the built-in parser. Start with who gave the task, describe the work, then choose an assignee.'
+          : 'Text chat works with the built-in parser. Give the employee name, describe any issue, then choose an assignee.';
+      el.assistantPreviewNotice.classList.toggle('hidden', !assistantEnabled || assistantAIEnabled);
       el.assistantMessages.replaceChildren();
       appendAssistantMessage('assistant', tasksMode
         ? 'Hello! First tell me who gave the task, then describe what needs to be done and who to assign it to.'
@@ -1878,8 +2015,8 @@
         }
       });
       el.assistantStatus.textContent = tasksMode
-        ? (assistantEnabled ? 'Task assistant ready · Given by → task details → assign to.' : 'Task chat and voice will work when the AI service is connected.')
-        : (assistantEnabled ? 'AI ready · create pending tickets by chat or voice.' : 'AI service is not configured yet.');
+        ? (assistantEnabled ? (assistantAIEnabled ? 'Task chat ready · Given by → task details → assign to.' : 'Built-in task chat ready · voice availability is shown above.') : 'Chat service is unavailable. Check the app connection and refresh.')
+        : (assistantEnabled ? (assistantAIEnabled ? 'Ticket chat ready · create pending tickets by text or voice.' : 'Built-in ticket chat ready · voice availability is shown above.') : 'Chat service is unavailable. Check the app connection and refresh.');
     }
 
     function switchWorkspace(mode, updateURL = true) {
@@ -2051,11 +2188,29 @@
       const query = el.taskSearchInput.value.trim().toLocaleLowerCase();
       const pendingTasks = taskEntries.filter((task) => task.status === 'pending');
       const visible = pendingTasks.filter((task) => {
-        const text = [task.description, task.assigned_to, `tsk-${task.id}`].filter(Boolean).join(' ').toLocaleLowerCase();
+        const text = [task.description, task.created_by, task.assigned_to, `tsk-${task.id}`].filter(Boolean).join(' ').toLocaleLowerCase();
         return !query || text.includes(query);
       });
       el.taskList.replaceChildren(...visible.map(createTaskCard));
       el.taskEmptyState.classList.toggle('hidden', visible.length > 0);
+      el.taskClearSearchButton.classList.toggle('hidden', !query);
+      if (!visible.length) {
+        const title = el.taskEmptyState.querySelector('h3');
+        const message = el.taskEmptyState.querySelector('p');
+        if (query) {
+          title.textContent = `No pending tasks match “${el.taskSearchInput.value.trim()}”.`;
+          message.textContent = 'Try a shorter search, or clear it to see all pending tasks.';
+        } else if (pendingTasks.length) {
+          title.textContent = 'No pending tasks';
+          message.textContent = 'There are no open tasks right now.';
+        } else if (taskEntries.length) {
+          title.textContent = 'All caught up';
+          message.textContent = 'There are no pending tasks. Review completed work in Task Admin.';
+        } else {
+          title.textContent = 'No tasks yet';
+          message.textContent = 'Create one with the form, or describe the work to Task Assistant.';
+        }
+      }
       el.taskListSummary.textContent = `${visible.length} shown · ${pendingTasks.length} pending`;
       renderTaskAnalytics();
     }
@@ -2080,6 +2235,9 @@
       editingTaskId = null;
       el.taskCreatedByInput.querySelectorAll('[data-task-legacy]').forEach((option) => option.remove());
       el.taskForm.reset();
+      el.taskCreatorCustomInput.value = '';
+      el.taskCreatorCustomInput.required = false;
+      el.taskCreatorCustomWrap.classList.add('hidden');
       el.taskFormTitle.textContent = 'Create a task';
       el.taskSubmitButton.textContent = 'Create task';
       el.taskCancelEditButton.classList.add('hidden');
@@ -2098,8 +2256,19 @@
       creator.value = name;
     }
 
+    function toggleTaskCreatorCustomField() {
+      const needsCustomName = el.taskCreatedByInput.value === '__other__';
+      el.taskCreatorCustomWrap.classList.toggle('hidden', !needsCustomName);
+      el.taskCreatorCustomInput.required = needsCustomName;
+      if (needsCustomName) el.taskCreatorCustomInput.focus();
+      else el.taskCreatorCustomInput.value = '';
+    }
+
     function beginTaskEdit(task) {
       editingTaskId = task.id;
+      el.taskCreatorCustomInput.value = '';
+      el.taskCreatorCustomInput.required = false;
+      el.taskCreatorCustomWrap.classList.add('hidden');
       el.taskDescriptionInput.value = task.description || '';
       setTaskCreatorValue(task.created_by);
       el.taskAssigneeInput.value = task.assigned_to || '';
@@ -2132,7 +2301,7 @@
       el.taskFormError.classList.add('hidden');
       const payload = {
         description: el.taskDescriptionInput.value.trim(),
-        created_by: el.taskCreatedByInput.value.trim(),
+        created_by: (el.taskCreatedByInput.value === '__other__' ? el.taskCreatorCustomInput.value : el.taskCreatedByInput.value).trim(),
         assigned_to: el.taskAssigneeInput.value,
       };
       el.taskSubmitButton.disabled = true;
@@ -2142,9 +2311,14 @@
         const url = editing ? `/api/tasks/${editingTaskId}` : '/api/tasks';
         const { ok, data } = await api(url, { method: editing ? 'PATCH' : 'POST', body: JSON.stringify(payload) });
         if (!ok) throw new Error(data.error || 'Task could not be saved.');
+        const nextCreatedBy = editing ? '' : payload.created_by;
+        const nextAssignee = editing ? '' : payload.assigned_to;
         resetTaskForm();
+        if (nextCreatedBy) setTaskCreatorValue(nextCreatedBy);
+        if (nextAssignee) el.taskAssigneeInput.value = nextAssignee;
         await loadTaskBoard();
-        showToast(editing ? 'Task changes saved.' : 'Task created.', 'info');
+        showToast(editing ? 'Task changes saved.' : 'Task created. Requester and assignee kept for the next task.', 'info');
+        if (!editing) el.taskDescriptionInput.focus({ preventScroll: true });
       } catch (error) {
         el.taskFormError.textContent = error.message || 'Task could not be saved.';
         el.taskFormError.classList.remove('hidden');
@@ -2156,10 +2330,21 @@
     el.ticketModeButton.addEventListener('click', () => switchWorkspace('tickets'));
     el.taskModeButton.addEventListener('click', () => switchWorkspace('tasks'));
     el.taskCancelEditButton.addEventListener('click', resetTaskForm);
+    el.taskCreatedByInput.addEventListener('change', toggleTaskCreatorCustomField);
+    el.taskClearSearchButton.addEventListener('click', () => {
+      el.taskSearchInput.value = '';
+      renderTaskBoard();
+      el.taskSearchInput.focus();
+    });
     el.taskRefreshButton.addEventListener('click', loadTaskBoard);
     el.taskAssistantOpenButton.addEventListener('click', () => {
       el.assistantPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
       window.setTimeout(() => el.assistantInput.focus({ preventScroll: true }), 280);
+    });
+    el.taskCreateOpenButton.addEventListener('click', () => {
+      if (editingTaskId !== null) resetTaskForm();
+      el.taskForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.setTimeout(() => el.taskCreatedByInput.focus({ preventScroll: true }), 280);
     });
     el.taskSearchInput.addEventListener('input', () => {
       clearTimeout(taskSearchTimer);
@@ -2181,7 +2366,7 @@
       button.addEventListener('click', () => {
         el.assistantInput.value = button.dataset.assistantPrompt;
         el.assistantInput.focus();
-        el.assistantStatus.textContent = 'Example বসানো হয়েছে। AI service যুক্ত হলে এটি পাঠাতে পারবেন।';
+        el.assistantStatus.textContent = 'Example added to the message box. Review it, then press Send.';
       });
     });
     el.assistantDemoUse.addEventListener('click', () => {
@@ -2252,6 +2437,14 @@
         : `Microphone selected: ${selected}. Press Speak to record.`;
     });
     el.assistantMicRefresh.addEventListener('click', async () => {
+      if ((!assistantAIEnabled || assistantBrowserVoiceFallback) && browserSpeechRecognitionAvailable) {
+        el.assistantStatus.textContent = 'Chrome speech recognition uses the Windows default microphone. Change it in Windows Settings → System → Sound → Input.';
+        return;
+      }
+      if (!assistantAIEnabled && !browserSpeechRecognitionAvailable) {
+        el.assistantStatus.textContent = 'Voice input is unavailable in this browser. Text chat still works.';
+        return;
+      }
       el.assistantStatus.textContent = 'Connected microphones খুঁজছি…';
       const count = await refreshAssistantMicDevices();
       el.assistantStatus.textContent = count

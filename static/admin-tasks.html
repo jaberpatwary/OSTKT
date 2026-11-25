@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-  <link rel="stylesheet" href="/theme.css?v=20261126-full-redesign5" />
-  <link rel="stylesheet" href="/premium.css?v=20261126-full-redesign5" />
+  <link rel="stylesheet" href="/theme.css?v=20261126-full-redesign7" />
+  <link rel="stylesheet" href="/premium.css?v=20261126-full-redesign7" />
   <style>
     body { font-family: "Manrope", "Hind Siliguri", system-ui, sans-serif; }
     html.dark #taskAdminSurface { background:#151e35 !important; border-color:#334268 !important; }
@@ -21,7 +21,7 @@
     html.dark .task-admin-card { background:#151e35 !important; border-color:#334268 !important; }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto !important; transition-duration:.01ms !important; } }
   </style>
-  <link rel="stylesheet" href="/experience.css?v=20261126-full-redesign5" />
+  <link rel="stylesheet" href="/experience.css?v=20261126-full-redesign7" />
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-800">
   <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -47,6 +47,7 @@
         <div class="flex flex-col gap-2 sm:flex-row">
           <label class="sr-only" for="taskSearch">Search tasks</label><input id="taskSearch" type="search" placeholder="Search details, Given by, owner…" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
           <label class="sr-only" for="taskStatusFilter">Filter tasks by status</label><select id="taskStatusFilter" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"><option value="">All statuses</option><option value="pending">Pending</option><option value="in_progress">In progress</option><option value="done">Done</option></select>
+          <button id="taskAdminClearFilters" type="button" class="hidden rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-50">Clear filters</button>
         </div>
       </div>
       <div id="taskAdminError" role="alert" class="hidden m-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800"></div>
@@ -119,6 +120,11 @@
         actionCell.append(save); row.append(details, givenBy, ownerCell, statusCell, actionCell); return row;
       }));
       $('taskEmpty').classList.toggle('hidden', visible.length > 0);
+      const hasFilters = Boolean(query || status);
+      $('taskAdminClearFilters').classList.toggle('hidden', !hasFilters);
+      if (!visible.length) $('taskEmpty').textContent = hasFilters
+        ? 'No tasks match these filters. Clear filters or try another search.'
+        : 'No tasks have been created yet. Create one from the task board.';
     }
 
     async function loadTasks() {
@@ -135,6 +141,12 @@
 
     $('taskSearch').addEventListener('input', renderTasks);
     $('taskStatusFilter').addEventListener('change', renderTasks);
+    $('taskAdminClearFilters').addEventListener('click', () => {
+      $('taskSearch').value = '';
+      $('taskStatusFilter').value = '';
+      renderTasks();
+      $('taskSearch').focus();
+    });
     $('taskAdminRefresh').addEventListener('click', loadTasks);
     loadTasks();
   })();

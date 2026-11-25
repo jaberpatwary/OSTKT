@@ -53,7 +53,7 @@ html.dark #dashboardSection::-webkit-scrollbar-thumb, html.dark #ticketSection::
 .assistant-panel-fullscreen { position: fixed; inset: 1rem; z-index: 80; display: flex; flex-direction: column; width: auto; max-width: none; max-height: calc(100dvh - 2rem); margin: 0; box-shadow: 0 24px 80px rgb(15 23 42 / .35); }
 .assistant-panel-fullscreen #assistantMessages { flex: 1 1 auto; min-height: 0; max-height: none !important; }
 .assistant-panel-fullscreen .assistant-composer { flex: 0 0 auto; }
-body.assistant-chat-expanded { overflow: hidden; }
+body.assistant-chat-expanded { overflow-x: hidden; }
 html.dark .assistant-panel { background: linear-gradient(145deg, #172033 0%, #101b2c 100%); }
 html.dark .assistant-composer { background: #172033; }
 @media (prefers-reduced-motion: no-preference) {

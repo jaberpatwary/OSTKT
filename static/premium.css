@@ -156,7 +156,6 @@ html.dark #dashboardSection > .grid.grid-cols-2 article p:nth-child(2) { color: 
   box-shadow: 0 10px 28px rgba(41, 57, 89, .045) !important;
 }
 #dashboardSection > .mt-4.grid > section h3 { color: var(--premium-ink) !important; letter-spacing: -.025em; }
-#dashboardSection > .mt-4.grid > section:last-child { grid-column: span 6; }
 
 /* Combined ticket/task queue cards stay tinted in both themes. */
 #dashboardSection .combined-pending-ticket {
@@ -458,7 +457,6 @@ html.dark .admin-task-link { border-color:#3b3e70; background:#202344; color:#c2
   #dashboardSection > .mt-5 { align-items: stretch; }
   #dashboardSection > .mt-5 > div:last-child { width: 100%; }
   #dashboardSearch { width: 100% !important; }
-  #dashboardSection > .mt-4.grid > section:last-child { grid-column: span 2; }
   body:has(#ticketRows) > main > header { align-items: flex-start; flex-direction: column; padding: 22px 20px; }
   body:has(#ticketRows) > main > header nav { width: 100%; }
   body:has(#ticketRows) > main > header nav > * { flex: 1 1 auto; justify-content: center; }
@@ -521,7 +519,7 @@ html.dark #nameInput:focus { background:#111a2b !important; }
 @media (max-width:420px) { .employee-search-heading { margin-top:20px; } }
 
 /* Task workspace: elevated board, compact metrics, and clearer work cards */
-#taskWorkspace { max-width:1600px; margin-inline:auto; }
+#taskWorkspace { width:100%; max-width:none; margin:0; }
 #workspaceTabs { padding:6px; border-color:rgba(123,135,170,.2); background:rgba(255,255,255,.72); backdrop-filter:blur(14px); }
 html.dark #workspaceTabs { background:rgba(17,27,47,.78); }
 .task-page-header { position:relative; isolation:isolate; overflow:hidden; min-height:154px; padding:30px 34px; border:1px solid rgba(255,255,255,.12); background:radial-gradient(ellipse at 80% 0%,rgba(45,212,191,.25),transparent 36%),linear-gradient(118deg,#111a36 0%,#242960 54%,#174d61 100%); }

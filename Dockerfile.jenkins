@@ -11,7 +11,7 @@ RUN apt-get update \
     && rm -f /tmp/go.tar.gz \
     && rm -rf /var/lib/apt/lists/*
 ENV PATH="/usr/local/go/bin:${PATH}"
-RUN jenkins-plugin-cli --plugins workflow-aggregator git credentials-binding
+RUN jenkins-plugin-cli --plugins workflow-aggregator git credentials-binding timestamper
 RUN mkdir -p /usr/share/jenkins/ref/init.groovy.d
 COPY --chown=jenkins:jenkins jenkins/init.groovy.d/01-admin.groovy /usr/share/jenkins/ref/init.groovy.d/01-admin.groovy
 USER jenkins

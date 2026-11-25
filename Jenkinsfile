@@ -1,6 +1,14 @@
 pipeline {
     agent any
 
+    parameters {
+        booleanParam(
+            name: 'DEPLOY_TO_RENDER',
+            defaultValue: false,
+            description: 'Optional: deploy to Render after all CI stages pass. Requires the render-deploy-hook credential.'
+        )
+    }
+
     options {
         timestamps()
         disableConcurrentBuilds()
@@ -43,8 +51,10 @@ pipeline {
 
         stage('Deploy to Render') {
             when {
-                expression {
-                    env.BRANCH_NAME == 'main' || env.GIT_BRANCH == 'main' || env.GIT_BRANCH == 'origin/main'
+                allOf {
+                    expression {
+                        params.DEPLOY_TO_RENDER && (env.BRANCH_NAME == 'main' || env.GIT_BRANCH == 'main' || env.GIT_BRANCH == 'origin/main')
+                    }
                 }
             }
             steps {

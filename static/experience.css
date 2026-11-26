@@ -419,3 +419,314 @@ html.dark #ticketNumber { color: #c7adff !important; }
 html.dark .bg-blue-600, html.dark .bg-blue-700 { background-color: #7045d8 !important; }
 html.dark .text-blue-600, html.dark .text-blue-700 { color: #c7adff !important; }
 html.dark .border-blue-200, html.dark .border-blue-300 { border-color: #49385e !important; }
+
+/* Equal, comfortable ticket/task tabs at every viewport. */
+#workspaceTabs > button.workspace-tab {
+  display: inline-flex;
+  width: 100%;
+  min-width: 124px;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  #workspaceTabs { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(112px, .78fr)); }
+  #workspaceTabs > button.workspace-tab { min-width: 0; }
+}
+@media (max-width: 520px) {
+  #workspaceTabs { grid-template-columns: minmax(96px, 1fr) repeat(2, minmax(84px, 1fr)); gap: 4px; }
+  #workspaceTabs > button.workspace-tab { min-height: 44px; padding-inline: 8px; font-size: 12px; }
+}
+@media (max-width: 360px) {
+  #workspaceTabs { grid-template-columns: minmax(88px, 1fr) repeat(2, minmax(78px, 1fr)); gap: 3px; }
+  #workspaceTabs > button.workspace-tab { min-height: 42px; padding-inline: 5px; font-size: 11px; }
+}
+
+#taskWorkspace .task-page-actions { align-items: center !important; }
+#taskWorkspace .task-page-actions > a,
+#taskWorkspace .task-page-actions > button {
+  display: inline-flex !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  align-self: center !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box;
+  margin-block: 0 !important;
+  line-height: 1.15 !important;
+  vertical-align: middle;
+}
+
+/* Keep ticket triage controls easy to scan, including in dark mode. */
+.priority-select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--premium-line);
+  border-radius: 10px;
+  background: var(--premium-surface);
+  color: var(--premium-ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+.priority-select.priority-urgent { border-color: #efb0bb; background: #fff0f2; color: #a92744; }
+.priority-select.priority-high { border-color: #f3c17e; background: #fff5e6; color: #8c4d00; }
+.priority-select.priority-medium { border-color: #cbd3ff; background: #f0f2ff; color: #454ab1; }
+.priority-select.priority-low { border-color: #d5deea; background: #f4f7fb; color: #52627a; }
+html.dark .priority-select { background: #151020 !important; color: #f5efff !important; border-color: #493a61 !important; }
+html.dark .priority-select.priority-urgent { background: #3b1e29 !important; color: #ffc0cb !important; border-color: #7e3546 !important; }
+html.dark .priority-select.priority-high { background: #392919 !important; color: #ffd39a !important; border-color: #795323 !important; }
+html.dark .priority-select.priority-medium { background: #252342 !important; color: #cbcaff !important; border-color: #4d4a82 !important; }
+html.dark .priority-select.priority-low { background: #252b36 !important; color: #d0d9e7 !important; border-color: #475569 !important; }
+html.dark .task-status-select.status-pending { background: #3b2e19 !important; color: #ffdc99 !important; border-color: #745323 !important; }
+html.dark .task-status-select.status-in_progress { background: #252342 !important; color: #cbcaff !important; border-color: #4d4a82 !important; }
+html.dark .task-status-select.status-done { background: #173328 !important; color: #9ae6c1 !important; border-color: #276747 !important; }
+
+.dashboard-update-pill {
+  order: -1;
+  display: inline-flex;
+  flex: 0 0 auto !important;
+  min-height: 38px;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid rgba(151, 240, 222, .34);
+  border-radius: 999px;
+  background: rgba(20, 157, 132, .16);
+  color: #c8ffed !important;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.dashboard-update-pill::before {
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #65f0c4;
+  box-shadow: 0 0 0 4px rgba(101, 240, 196, .12), 0 0 14px rgba(101, 240, 196, .55);
+  content: "";
+}
+
+/* Signal Desk: a shared, high-contrast operations console theme. */
+:root {
+  color-scheme: light;
+  --premium-ink: #10253b;
+  --premium-muted: #60758b;
+  --premium-line: #d6e2ec;
+  --premium-surface: rgba(255, 255, 255, .9);
+  --premium-accent: #087fb5;
+  --premium-teal: #0a9c8b;
+  --premium-shadow: 0 18px 48px rgba(18, 50, 77, .09);
+  --ui-focus: rgba(8, 127, 181, .22);
+}
+html.dark {
+  color-scheme: dark;
+  --premium-ink: #eaf5fc;
+  --premium-muted: #91a9bc;
+  --premium-line: #263d50;
+  --premium-surface: rgba(12, 27, 42, .94);
+  --premium-accent: #50cfff;
+  --premium-teal: #54e1c2;
+  --premium-shadow: 0 24px 64px rgba(0, 0, 0, .34);
+  --ui-focus: rgba(80, 207, 255, .25);
+}
+body {
+  position: relative;
+  isolation: isolate;
+  color: var(--premium-ink) !important;
+  background:
+    radial-gradient(ellipse at 4% 0%, rgba(14, 165, 196, .12), transparent 34rem),
+    radial-gradient(ellipse at 96% 4%, rgba(70, 111, 236, .11), transparent 32rem),
+    #f1f6fa !important;
+}
+html.dark body {
+  background:
+    radial-gradient(ellipse at 2% -8%, rgba(7, 153, 183, .2), transparent 35rem),
+    radial-gradient(ellipse at 100% 0%, rgba(46, 96, 194, .18), transparent 34rem),
+    #07111c !important;
+}
+body::before {
+  opacity: .62;
+  background-size: 42px 42px !important;
+  background-image: linear-gradient(rgba(35, 91, 124, .035) 1px, transparent 1px), linear-gradient(90deg, rgba(35, 91, 124, .035) 1px, transparent 1px) !important;
+  mask-image: linear-gradient(to bottom, black, transparent 86%);
+}
+html.dark body::before {
+  background-image: linear-gradient(rgba(111, 192, 221, .045) 1px, transparent 1px), linear-gradient(90deg, rgba(111, 192, 221, .045) 1px, transparent 1px) !important;
+}
+body::after {
+  position: fixed;
+  z-index: -1;
+  top: -24rem;
+  right: -14rem;
+  width: 48rem;
+  height: 48rem;
+  border: 1px solid rgba(17, 152, 187, .12);
+  border-radius: 50%;
+  box-shadow: 0 0 0 36px rgba(17, 152, 187, .035), 0 0 0 82px rgba(54, 110, 205, .025);
+  content: "";
+  pointer-events: none;
+}
+html.dark body::after { border-color: rgba(80, 207, 255, .14); box-shadow: 0 0 0 36px rgba(80, 207, 255, .04), 0 0 0 82px rgba(91, 125, 255, .035); }
+
+#workspaceTabs {
+  border-color: rgba(107, 139, 162, .32);
+  border-radius: 16px;
+  background: rgba(249, 252, 254, .86);
+  box-shadow: 0 12px 32px rgba(20, 51, 74, .1);
+}
+html.dark #workspaceTabs { border-color: #294255; background: rgba(8, 22, 35, .94); }
+.workspace-brand-mark { background: linear-gradient(145deg, #087fb5, #09a991) !important; box-shadow: 0 8px 20px rgba(8, 127, 181, .26) !important; }
+#workspaceTabs > button.workspace-tab { border-radius: 11px; }
+.workspace-tab.is-active { background: linear-gradient(120deg, #087fb5, #0aa38f) !important; box-shadow: 0 8px 18px rgba(8, 127, 181, .25) !important; }
+
+#dashboardSection, #ticketSection, .task-dashboard-section, .task-entry-section {
+  border-color: var(--premium-line) !important;
+  border-radius: 25px !important;
+  background: var(--premium-surface) !important;
+  box-shadow: var(--premium-shadow) !important;
+}
+#dashboardSection > header, .task-dashboard-section > .task-page-header,
+body > main > header, body:has(#ticketRows) > main > header {
+  border: 1px solid rgba(139, 231, 242, .2) !important;
+  background:
+    radial-gradient(circle at 82% 5%, rgba(64, 218, 211, .24), transparent 21rem),
+    linear-gradient(112deg, #0a2038 0%, #123c58 56%, #087d83 125%) !important;
+  box-shadow: 0 20px 44px rgba(7, 46, 69, .22) !important;
+}
+#dashboardSection > header h2, .task-dashboard-section > .task-page-header h1,
+body > main > header h1 { color: #f5fbff !important; letter-spacing: -.05em; }
+#dashboardSection > header p:first-child, .task-dashboard-section .task-page-header .task-eyebrow { color: #67ead5 !important; }
+#dashboardSection > header p:last-child, .task-dashboard-section > .task-page-header p:last-child { color: #c5dce9 !important; }
+#dashboardSection > header button, #dashboardSection > header a,
+.task-page-actions > a, .task-page-actions > button,
+body > main > header nav a, body > main > header nav button {
+  border-color: rgba(191, 238, 246, .25) !important;
+  background: rgba(222, 247, 250, .1) !important;
+  color: #f1fbff !important;
+  box-shadow: 0 8px 18px rgba(0, 20, 35, .13) !important;
+  backdrop-filter: blur(12px);
+}
+#dashboardSection > header button:hover, #dashboardSection > header a:hover,
+.task-page-actions > a:hover, .task-page-actions > button:hover,
+body > main > header nav a:hover, body > main > header nav button:hover {
+  border-color: rgba(119, 236, 225, .62) !important;
+  background: rgba(65, 207, 197, .2) !important;
+  transform: translateY(-2px);
+}
+
+#dashboardSection > .grid.grid-cols-2 article, .task-summary-grid article,
+body > main > section[aria-label="Ticket summary"] > div, .task-admin-card {
+  border-color: var(--premium-line) !important;
+  border-radius: 18px !important;
+  background: linear-gradient(150deg, rgba(255,255,255,.98), rgba(239,247,251,.92)) !important;
+  box-shadow: 0 9px 26px rgba(15, 52, 78, .055) !important;
+}
+html.dark #dashboardSection > .grid.grid-cols-2 article, html.dark .task-summary-grid article,
+html.dark body > main > section[aria-label="Ticket summary"] > div, html.dark .task-admin-card {
+  border-color: #294255 !important;
+  background: linear-gradient(150deg, #10263a, #0b1b2b) !important;
+}
+#dashboardSection > .grid.grid-cols-2 article:hover, .task-summary-grid article:hover,
+body > main > section[aria-label="Ticket summary"] > div:hover, .task-admin-card:hover {
+  border-color: rgba(8, 154, 166, .42) !important;
+  box-shadow: 0 16px 34px rgba(15, 52, 78, .11) !important;
+  transform: translateY(-3px);
+}
+#dashboardSection > .grid.grid-cols-2 article p:nth-child(2), .task-summary-grid article strong,
+body > main > section[aria-label="Ticket summary"] > div p:last-child, .task-admin-card strong {
+  color: var(--premium-ink) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+#dashboardSection > .mt-4.grid > section, .task-analytics-card,
+.dashboard-analytics-disclosure, .task-analytics {
+  border-color: var(--premium-line) !important;
+  border-radius: 19px !important;
+  background: var(--premium-surface) !important;
+  box-shadow: 0 10px 26px rgba(15, 52, 78, .045) !important;
+}
+html.dark #dashboardSection > .mt-5, html.dark .task-analytics { background: rgba(9, 22, 35, .86) !important; }
+#ticketSection > header > div:first-child, #assistantPanel > header > div:first-child > span:first-child,
+.task-form-icon { background: linear-gradient(145deg, #087fb5, #0aa58f) !important; box-shadow: 0 10px 24px rgba(8, 127, 181, .23) !important; }
+#ticketSection > header > a { border-color: #b9dce9 !important; color: #08749c !important; }
+html.dark #ticketSection > header > a { border-color: #295366 !important; color: #71d8ed !important; }
+#nameInput { background: rgba(248, 252, 254, .98) !important; }
+html.dark #nameInput { background: #0b1b2b !important; }
+#assistantPanel, .assistant-panel { border-color: var(--premium-line) !important; border-radius: 20px !important; }
+#assistantPanel > header, .assistant-panel > header { background: linear-gradient(110deg, rgba(13, 126, 166, .13), rgba(10, 168, 143, .12)) !important; border-color: var(--premium-line) !important; }
+html.dark #assistantPanel > header, html.dark .assistant-panel > header { background: linear-gradient(110deg, rgba(11, 103, 143, .25), rgba(10, 129, 111, .2)) !important; }
+
+#ticketRows tr, #taskAdminSurface tbody tr { transition: background-color .16s ease; }
+#ticketRows tr:hover, #taskAdminSurface tbody tr:hover { background: rgba(8, 127, 181, .055) !important; }
+html.dark #ticketRows tr:hover, html.dark #taskAdminSurface tbody tr:hover { background: rgba(80, 207, 255, .08) !important; }
+body > main table thead, #taskAdminSurface thead { background: #edf5f9 !important; color: #557087 !important; }
+html.dark body > main table thead, html.dark #taskAdminSurface thead { background: #0b1a29 !important; color: #9ab4c8 !important; }
+input:focus, select:focus, textarea:focus { border-color: var(--premium-accent) !important; box-shadow: 0 0 0 4px var(--ui-focus) !important; }
+.priority-select.priority-urgent { border-color: #f0a7b5; background: #fff0f2; color: #a92744; }
+.priority-select.priority-high { border-color: #efbe79; background: #fff5e6; color: #8c4d00; }
+.priority-select.priority-medium { border-color: #a9ddec; background: #eaf8fc; color: #075c7f; }
+.priority-select.priority-low { border-color: #cfdce6; background: #f2f6f9; color: #52677c; }
+html.dark .priority-select.priority-medium { background: #123447 !important; color: #84e2f4 !important; border-color: #27637a !important; }
+html.dark .task-status-select.status-in_progress { background: #123447 !important; color: #84e2f4 !important; border-color: #27637a !important; }
+.bg-blue-600 { background: linear-gradient(120deg, #087fb5, #0a9d8f) !important; }
+.bg-blue-700 { background: linear-gradient(120deg, #066b9a, #078272) !important; }
+.text-blue-600, .text-blue-700 { color: #087ca6 !important; }
+.border-blue-200, .border-blue-300 { border-color: #b9dce9 !important; }
+html.dark .text-blue-600, html.dark .text-blue-700 { color: #70d9ee !important; }
+html.dark .border-blue-200, html.dark .border-blue-300 { border-color: #295366 !important; }
+
+@media (max-width: 720px) {
+  #dashboardSection > header, .task-dashboard-section > .task-page-header { gap: 12px; }
+  #dashboardSection > .grid.grid-cols-2 article, .task-summary-grid article { min-height: 92px !important; }
+  body > main > header { box-shadow: 0 13px 28px rgba(7, 46, 69, .2) !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body::after { animation: none !important; }
+}
+
+.task-problem-box {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--premium-line);
+  border-radius: 12px;
+  background: rgba(246, 249, 255, .82);
+}
+.task-problem-label {
+  display: block;
+  color: var(--premium-accent);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .11em;
+}
+.task-card .task-card-description {
+  display: block;
+  min-height: 0;
+  margin: 5px 0 0;
+  overflow: visible;
+  -webkit-box-orient: initial;
+  -webkit-line-clamp: unset;
+  color: var(--premium-ink);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.task-admin-problem-box { max-width: 620px; }
+.task-admin-problem-text {
+  margin: 5px 0 0;
+  color: var(--premium-ink);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+html.dark .task-problem-box { border-color: var(--premium-line); background: rgba(8, 16, 30, .48); }
+html.dark .task-problem-label { color: #6ed6e9; }

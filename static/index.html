@@ -61,9 +61,9 @@
       * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
   </style>
-  <link rel="stylesheet" href="/theme.css?v=20261126-full-redesign7" />
-  <link rel="stylesheet" href="/premium.css?v=20261126-full-redesign7" />
-  <link rel="stylesheet" href="/experience.css?v=20261126-full-redesign7" />
+  <link rel="stylesheet" href="/theme.css?v=20261126-full-redesign9" />
+  <link rel="stylesheet" href="/premium.css?v=20261126-full-redesign9" />
+  <link rel="stylesheet" href="/experience.css?v=20261126-signal-desk2" />
 </head>
 
 <body class="min-h-screen bg-gradient-to-b from-blue-50 via-sky-50/50 to-white bg-fixed text-slate-800 antialiased">
@@ -117,16 +117,16 @@
           <form id="taskForm" class="task-form-card">
             <div class="task-form-heading"><span class="task-form-icon">＋</span><div><h2 id="taskFormTitle">Create a task</h2><p>Capture a piece of work and give it an owner.</p></div></div>
             <p class="task-form-help">Given by = যিনি কাজটি দিয়েছেন। Assign to = যিনি কাজটি করবেন। নাম তালিকায় না থাকলে “Someone else…” বেছে নাম লিখুন।</p>
-            <label for="taskCreatedByInput">Given by <span>*</span></label>
-            <select id="taskCreatedByInput" required><option value="">Select who gave this task</option><option>Rupok Kumar Roy</option><option>Towhedul Islam</option><option>Md. Imam Hossan Chowdhury</option><option>Muhammad Fokhrul Hasan</option><option>Md. Tanvir Ahamed Sarkar</option><option>Md. Fahad Hossen</option><option>Mabubul Alam Patwary</option><option value="__other__">Someone else…</option></select>
+            <label for="taskCreatedByInput">Given by <small>Defaults to Md. Tanvir Ahamed Sarkar</small></label>
+            <select id="taskCreatedByInput" required><option>Rupok Kumar Roy</option><option>Towhedul Islam</option><option>Md. Imam Hossan Chowdhury</option><option>Muhammad Fokhrul Hasan</option><option value="Md. Tanvir Ahamed Sarkar" selected>Md. Tanvir Ahamed Sarkar (default)</option><option>Md. Fahad Hossen</option><option>Mabubul Alam Patwary</option><option value="__other__">Someone else…</option></select>
             <div id="taskCreatorCustomWrap" class="hidden flex flex-col gap-2">
               <label class="text-xs font-bold text-slate-700" for="taskCreatorCustomInput">Requester name <span class="text-rose-500">*</span></label>
               <input id="taskCreatorCustomInput" type="text" maxlength="100" autocomplete="name" placeholder="Type the requester's name" />
             </div>
             <label for="taskDescriptionInput">Task details <span>*</span></label>
             <textarea id="taskDescriptionInput" rows="5" maxlength="2000" placeholder="Describe the work to do…" required></textarea>
-            <label for="taskAssigneeInput">Assign to <small>Optional</small></label>
-            <select id="taskAssigneeInput"><option value="">Unassigned</option><option>Rupok Kumar Roy</option><option>Towhedul Islam</option><option>Md. Imam Hossan Chowdhury</option><option>Muhammad Fokhrul Hasan</option><option>Md. Tanvir Ahamed Sarkar</option><option>Md. Fahad Hossen</option><option>Mabubul Alam Patwary</option></select>
+            <label for="taskAssigneeInput">Assign to <small>Defaults to IT Team</small></label>
+            <select id="taskAssigneeInput"><option value="IT Team" selected>IT Team (default)</option><option>Rupok Kumar Roy</option><option>Towhedul Islam</option><option>Md. Imam Hossan Chowdhury</option><option>Muhammad Fokhrul Hasan</option><option>Md. Tanvir Ahamed Sarkar</option><option>Md. Fahad Hossen</option><option>Mabubul Alam Patwary</option></select>
             <p id="taskFormError" class="task-form-error hidden" role="alert"></p>
             <div class="task-form-actions"><button id="taskSubmitButton" type="submit" class="task-primary-button">Create task</button><button id="taskCancelEditButton" type="button" class="premium-secondary-button hidden">Cancel edit</button></div>
           </form>
@@ -149,7 +149,7 @@
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <button id="themeToggle" type="button" data-theme-toggle class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50" aria-pressed="false">🌙 Dark mode</button>
-            <span id="dashboardUpdated" class="mr-1 text-xs text-slate-400">লোড হচ্ছে…</span>
+            <span id="dashboardUpdated" class="dashboard-update-pill" role="status" aria-live="polite">লোড হচ্ছে…</span>
             <button id="dashboardRefresh" type="button" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60">↻ Refresh</button>
             <a href="/admin" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-700">Manage tickets ↗</a>
           </div>
@@ -182,7 +182,7 @@
 
         <section class="mt-4 grid gap-4 xl:grid-cols-3" aria-label="Combined ticket and task queue">
           <article class="combined-pending-ticket rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm xl:col-span-1">
-            <p class="text-xs font-bold uppercase tracking-wider text-amber-700">Pending tickets</p>
+            <p class="text-xs font-bold uppercase tracking-wider text-amber-700">Open tickets</p>
             <p id="combinedPendingTicketCount" class="mt-2 text-4xl font-extrabold text-slate-900">—</p>
             <p class="mt-1 text-sm text-slate-500">Support requests waiting for resolution</p>
           </article>
@@ -204,7 +204,7 @@
         </details>
         <div class="mt-4 grid gap-4 2xl:grid-cols-6">
           <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-3"><div><h3 class="font-bold text-slate-800">Pending by assignee</h3><p class="text-xs text-slate-400">নাম বা Pending count-এ click করে কাজগুলো দেখুন</p></div><div id="assigneeWorkload" class="mt-4 space-y-2"></div></section>
-          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-3"><div class="flex flex-wrap items-center justify-between gap-2"><div><h3 class="font-bold text-slate-800">Recent tickets</h3><p id="recentTicketCount" class="text-xs text-slate-400">Latest support requests and assignees</p></div><div class="flex items-center gap-3"><button id="clearTicketFilters" type="button" class="hidden text-xs font-semibold text-rose-600 hover:underline">Clear filters</button><a href="/admin" class="text-xs font-semibold text-blue-700 hover:underline">Ticket manager →</a></div></div><ul id="dashboardRecent" class="mt-2 divide-y divide-slate-100"></ul><p id="dashboardEmpty" class="hidden py-6 text-center text-sm text-slate-400">এখনো কোনো টিকিট নেই</p></section>
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 2xl:col-span-3"><div class="flex flex-wrap items-center justify-between gap-2"><div><h3 class="font-bold text-slate-800">Recent pending tickets</h3><p id="recentTicketCount" class="text-xs text-slate-400">Latest pending requests and assignees</p></div><div class="flex items-center gap-3"><button id="clearTicketFilters" type="button" class="hidden text-xs font-semibold text-rose-600 hover:underline">Clear filters</button><a href="/admin" class="text-xs font-semibold text-blue-700 hover:underline">Ticket manager →</a></div></div><ul id="dashboardRecent" class="mt-2 divide-y divide-slate-100"></ul><p id="dashboardEmpty" class="hidden py-6 text-center text-sm text-slate-400">No pending tickets in this range.</p></section>
         </div>
         <p id="dashboardError" role="status" class="mt-3 hidden rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
       </section>
@@ -612,12 +612,13 @@
     }
 
     function appendAssistantTask(task) {
+      const display = taskDisplayFields(task);
       const card = document.createElement('article');
       card.className = 'ml-auto max-w-[95%] rounded-2xl border border-violet-200 bg-violet-50 p-3 text-xs';
       const reference = document.createElement('p'); reference.className = 'font-bold text-violet-800'; reference.textContent = 'Task TSK-' + String(task.id).padStart(6, '0');
-      const details = document.createElement('p'); details.className = 'mt-1 text-slate-600'; details.textContent = task.description || '';
-      const creator = document.createElement('p'); creator.className = 'mt-1 text-slate-600'; creator.textContent = 'Given by: ' + (task.created_by || '—');
-      const owner = document.createElement('p'); owner.className = 'mt-1 text-slate-600'; owner.textContent = 'Assigned to: ' + (task.assigned_to || 'Unassigned');
+      const details = document.createElement('p'); details.className = 'mt-1 text-slate-600'; details.textContent = display.description || '';
+      const creator = document.createElement('p'); creator.className = 'mt-1 text-slate-600'; creator.textContent = 'Given by: ' + (display.createdBy || '—');
+      const owner = document.createElement('p'); owner.className = 'mt-1 text-slate-600'; owner.textContent = 'Assigned to: ' + (task.assigned_to || 'IT Team');
       card.append(reference, details, creator, owner);
       el.assistantMessages.append(card);
       el.assistantMessages.scrollTop = el.assistantMessages.scrollHeight;
@@ -725,6 +726,37 @@
       return true;
     }
 
+    function taskCreatorSuggestionState(text) {
+      const marker = /^\s*(?:given\s*by|requested\s*by|task\s*creator)\s*[:=]?\s*/i.exec(text);
+      const start = marker ? marker[0].length : (text.length - text.trimStart().length);
+      const remaining = text.slice(start);
+      const typed = [...remaining.matchAll(/[\p{L}\p{N}.]+/gu)];
+      if (!typed.length) return null;
+      const typedTokens = typed.map((match) => match[0].toLocaleLowerCase().replace(/\./g, ''));
+      const matches = assistantAssignees.filter((name) => {
+        const tokens = name.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(/\s+/);
+        for (let offset = 0; offset <= tokens.length - typedTokens.length; offset++) {
+          if (typedTokens.every((token, index) => token && tokens[offset + index].startsWith(token))) return true;
+        }
+        return false;
+      });
+      if (!matches.length) return null;
+      const last = typed[typed.length - 1];
+      return { start, end: start + last.index + last[0].length, query: typedTokens.join(' '), matches };
+    }
+
+    function insertAssistantTaskCreatorName(name) {
+      const state = taskCreatorSuggestionState(el.assistantInput.value);
+      if (!state) return false;
+      const text = el.assistantInput.value;
+      el.assistantInput.value = text.slice(0, state.start) + name + text.slice(state.end);
+      el.assistantInput.focus();
+      hide(el.assistantAssigneeOptions);
+      const cursor = state.start + name.length;
+      el.assistantInput.setSelectionRange(cursor, cursor);
+      return true;
+    }
+
     function autoCorrectAssistantAssignee(text, typedValue) {
       if (!/\s$/.test(typedValue)) return false;
       const match = /\b(?:assign(?:ed|ee)?|assing)\b(?:\s+(?:to|by))?\s*(.*)$/i.exec(text);
@@ -738,16 +770,18 @@
       el.assistantInput.setSelectionRange(el.assistantInput.value.length, el.assistantInput.value.length);
       return true;
     }
-    function renderAssistantAssignees(query) {
+    function renderAssistantAssignees(query, purpose = 'assignee', suggestedNames = null) {
       const q = query.toLocaleLowerCase();
       const aliases = { jaber: 'Mabubul Alam Patwary', 'jaber patwary': 'Mabubul Alam Patwary' };
-      const matches = [...new Set(assistantAssignees.filter((name) => !q || name.toLocaleLowerCase().includes(q) || Object.entries(aliases).some(([alias, canonical]) => canonical === name && alias.includes(q))).concat(Object.entries(aliases).filter(([alias]) => q && alias.includes(q)).map(([, canonical]) => canonical)))];
+      const availableNames = assistantTaskMode && purpose === 'assignee' ? [...assistantAssignees, 'IT Team'] : assistantAssignees;
+      const matches = suggestedNames || [...new Set(availableNames.filter((name) => !q || name.toLocaleLowerCase().includes(q) || Object.entries(aliases).some(([alias, canonical]) => canonical === name && alias.includes(q))).concat(Object.entries(aliases).filter(([alias]) => q && alias.includes(q)).map(([, canonical]) => canonical)))];
       el.assistantEmployeeOptions.classList.add('hidden');
       el.assistantAssigneeOptions.replaceChildren(...matches.map((name) => {
         const option = document.createElement('button'); option.type = 'button'; option.setAttribute('role', 'option');
         option.className = 'block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-violet-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-500';
         option.textContent = `👤 ${name}`;
         option.addEventListener('click', () => {
+          if (purpose === 'creator' && insertAssistantTaskCreatorName(name)) return;
           if (el.assistantInput.value.trim() && insertAssistantAssigneeName(name)) return;
           hide(el.assistantAssigneeOptions);
           sendAssistantMessage(`Assignee নির্বাচন: ${name}`, name);
@@ -767,9 +801,17 @@
       const text = el.assistantInput.value;
       const assigneeMatch = text.match(/\b(?:assign(?:ed|ee)?|assing)\b(?:\s+(?:to|by))?\s*(.*)$/i);
       if (assigneeMatch) {
-        renderAssistantAssignees(assigneeMatch[1].trim());
+        renderAssistantAssignees(assigneeMatch[1].trim(), 'assignee');
         hide(el.assistantEmployeeOptions);
         return;
+      }
+      if (assistantTaskMode) {
+        const creatorState = taskCreatorSuggestionState(text);
+        if (creatorState) {
+          renderAssistantAssignees(creatorState.query, 'creator', creatorState.matches);
+          hide(el.assistantEmployeeOptions);
+          return;
+        }
       }
       hide(el.assistantAssigneeOptions);
       const query = assistantEmployeeQuery(text);
@@ -930,6 +972,7 @@
           el.assistantMic.textContent = '🎙️';
           appendAssistantTask(data.task);
           assistantConversation.length = 0;
+          assistantConversation.push({ role: 'assistant', content: 'Hello! Describe the task in your own words. Given by defaults to Md. Tanvir Ahamed Sarkar, and without an individual assignee it goes to IT Team.' });
           assistantConversationEmployeeID = '';
           loadTaskBoard();
           el.assistantStatus.textContent = 'Task created · keep chatting to add another task.';
@@ -938,6 +981,7 @@
           el.assistantMic.textContent = '🎙️';
           appendAssistantTicket(data.ticket);
           assistantConversation.length = 0;
+          assistantConversation.push({ role: 'assistant', content: 'Hello! Tell me the employee name and issue, then mention who to assign it to.' });
           assistantConversationEmployeeID = '';
           loadPending();
           loadDashboard();
@@ -1388,15 +1432,16 @@
 
     function renderRecentTickets(tickets) {
       const query = el.dashboardSearch.value.trim().toLowerCase();
-      const filtered = tickets.filter((ticket) => {
+      const pendingTickets = tickets.filter((ticket) => ticket.status === 'pending');
+      const filtered = pendingTickets.filter((ticket) => {
         if (activeIssueFilter && issueCategory(ticket) !== activeIssueFilter) return false;
         const haystack = `${ticket.ticket_number} ${ticket.employee?.Name || ''} ${ticket.problem || ''} ${ticket.assigned_to || ''}`.toLowerCase();
         return !query || haystack.includes(query);
       });
       const recent = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 8);
-      el.recentTicketCount.textContent = `${recent.length} shown · ${filtered.length} matching · ${tickets.length} in range`;
+      el.recentTicketCount.textContent = `${recent.length} shown · ${filtered.length} matching · ${pendingTickets.length} pending in range`;
       el.dashboardEmpty.classList.toggle('hidden', recent.length > 0);
-      el.dashboardEmpty.textContent = filtered.length ? 'No tickets match these filters.' : 'No tickets in this range yet.';
+      el.dashboardEmpty.textContent = filtered.length ? 'No pending tickets match these filters.' : 'No pending tickets in this range.';
       el.clearTicketFilters.classList.toggle('hidden', !activeIssueFilter && !query);
       el.clearTicketFilters.textContent = activeIssueFilter ? `Clear ${activeIssueFilter} filter` : 'Clear search';
       el.dashboardRecent.replaceChildren(...recent.map((ticket) => {
@@ -1412,16 +1457,16 @@
         summary.textContent = `${ticket.ticket_number || ''} · ${ticket.problem || 'No description'}${ticket.assigned_to ? ` · ${ticket.assigned_to}` : ''}`;
         details.append(person, summary);
         const status = document.createElement('span');
-        status.className = `shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${ticket.status === 'done' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`;
-        status.textContent = ticket.status === 'done' ? 'Done' : 'Pending';
+        status.className = `shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${ticket.status === 'done' ? 'bg-emerald-100 text-emerald-700' : ticket.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`;
+        status.textContent = ticket.status === 'done' ? 'Done' : ticket.status === 'in_progress' ? 'In progress' : 'Pending';
         item.append(details, status);
         return item;
       }));
     }
 
-    function renderAssigneeWorkload(pendingTickets) {
+    function renderAssigneeWorkload(openTickets) {
       const workload = new Map();
-      pendingTickets.forEach((ticket) => {
+      openTickets.forEach((ticket) => {
         const name = (ticket.assigned_to || '').trim() || 'Unassigned';
         if (!workload.has(name)) workload.set(name, []);
         workload.get(name).push(ticket);
@@ -1433,15 +1478,20 @@
         const summary = document.createElement('summary');
         summary.className = 'flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500';
         const label = document.createElement('span'); label.className = 'min-w-0 truncate font-semibold text-slate-700'; label.textContent = name;
-        const count = document.createElement('span'); count.className = 'shrink-0 rounded-full bg-amber-100 px-2 py-1 font-bold text-amber-800'; count.textContent = `${toBnDigits(tickets.length)} Pending ▾`; count.title = 'Click to view these pending tickets';
+        const count = document.createElement('span'); count.className = 'shrink-0 rounded-full bg-amber-100 px-2 py-1 font-bold text-amber-800'; count.textContent = `${toBnDigits(tickets.length)} Open ▾`; count.title = 'Click to view these open tickets';
         summary.append(label, count);
         const list = document.createElement('ul'); list.className = 'divide-y divide-slate-100 border-t border-slate-100';
         tickets.forEach((ticket) => {
           const item = document.createElement('li'); item.className = 'flex items-center justify-between gap-2 px-3 py-2';
           const info = document.createElement('button'); info.type = 'button'; info.className = 'min-w-0 flex-1 rounded-lg text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500'; info.setAttribute('aria-label', `Open full ticket ${ticket.ticket_number || ''}`);
           const person = document.createElement('p'); person.className = 'truncate text-xs font-semibold text-slate-700'; person.textContent = ticket.employee?.Name || ticket.ticket_number;
-          const issue = document.createElement('p'); issue.className = 'truncate text-[10px] text-slate-400'; issue.textContent = `${ticket.ticket_number} · ${formatDate(ticket.created_at)} · ${ticket.problem || 'No description'}`;
-          info.append(person, issue);
+          const issue = document.createElement('p'); issue.className = 'truncate text-[10px] text-slate-400'; issue.textContent = `${ticket.ticket_number} · ${ticket.status === 'in_progress' ? 'In progress' : 'Pending'} · ${formatDate(ticket.created_at)} · ${ticket.problem || 'No description'}`;
+          const priority = (ticket.priority || 'medium').toUpperCase();
+          const dueAt = new Date(ticket.sla_due_at || (new Date(ticket.created_at).getTime() + 24 * 60 * 60 * 1000));
+          const overdue = !Number.isNaN(dueAt.getTime()) && dueAt.getTime() < Date.now();
+          const sla = document.createElement('p'); sla.className = `truncate text-[10px] font-semibold ${overdue ? 'text-rose-600' : 'text-slate-500'}`;
+          sla.textContent = `${priority} priority · ${overdue ? 'SLA overdue' : 'SLA due'} ${Number.isNaN(dueAt.getTime()) ? 'not set' : formatDate(dueAt.toISOString())}`;
+          info.append(person, issue, sla);
           info.addEventListener('click', () => showResult(ticket));
           const done = document.createElement('button'); done.type = 'button'; done.className = 'shrink-0 rounded-lg bg-emerald-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50'; done.textContent = 'Done';
           done.addEventListener('click', () => convertToDone(ticket.id, done, false));
@@ -1450,11 +1500,11 @@
         group.append(summary, list); return group;
       }));
       if (!groups.length) el.assigneeWorkload.textContent = 'No open tickets';
-      const unassigned = pendingTickets.filter((ticket) => !(ticket.assigned_to || '').trim()).length;
+      const unassigned = openTickets.filter((ticket) => !(ticket.assigned_to || '').trim()).length;
       el.dashUnassigned.textContent = toBnDigits(unassigned);
-      const oldest = pendingTickets.reduce((maxAge, ticket) => Math.max(maxAge, Date.now() - new Date(ticket.created_at).getTime()), 0);
-      const oldestDays = pendingTickets.length ? Math.floor(oldest / 86400000) : 0;
-      el.dashOldest.textContent = pendingTickets.length ? (oldestDays ? `${toBnDigits(oldestDays)}d` : '<1d') : '—';
+      const oldest = openTickets.reduce((maxAge, ticket) => Math.max(maxAge, Date.now() - new Date(ticket.created_at).getTime()), 0);
+      const oldestDays = openTickets.length ? Math.floor(oldest / 86400000) : 0;
+      el.dashOldest.textContent = openTickets.length ? (oldestDays ? `${toBnDigits(oldestDays)}d` : '<1d') : '—';
     }
 
     function renderDashboardViews() {
@@ -1471,13 +1521,14 @@
       const pendingTasks = Array.isArray(tasks) ? tasks : [];
       el.combinedPendingTaskCount.textContent = toBnDigits(pendingTasks.length);
       el.combinedPendingTaskList.replaceChildren(...pendingTasks.map((task) => {
+        const display = taskDisplayFields(task);
         const item = document.createElement('article');
         item.className = 'flex min-w-0 items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4';
         const details = document.createElement('div'); details.className = 'min-w-0 flex-1';
-        const description = document.createElement('p'); description.className = 'whitespace-pre-wrap break-words text-sm leading-5 text-slate-700'; description.textContent = task.description || 'No additional details.';
+        const description = document.createElement('p'); description.className = 'whitespace-pre-wrap break-words text-sm leading-5 text-slate-700'; description.textContent = display.description || 'No additional details.';
         const meta = document.createElement('div'); meta.className = 'mt-3 grid gap-1 text-xs text-slate-500';
-        const creator = document.createElement('span'); creator.textContent = `Given by: ${task.created_by || 'Unknown'}`;
-        const owner = document.createElement('span'); owner.textContent = `Assigned to: ${task.assigned_to || 'Unassigned'}`;
+        const creator = document.createElement('span'); creator.textContent = `Given by: ${display.createdBy || 'Unknown'}`;
+        const owner = document.createElement('span'); owner.textContent = `Assigned to: ${task.assigned_to || 'IT Team'}`;
         meta.append(creator, owner); details.append(description, meta);
         const done = document.createElement('button'); done.type = 'button'; done.className = 'shrink-0 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50'; done.textContent = 'Mark done';
         done.addEventListener('click', async () => {
@@ -1498,41 +1549,44 @@
       el.dashboardError.classList.add('hidden');
       try {
         const fresh = `&_refresh=${Date.now()}`;
-        const [all, pending, done, pendingTasksResult] = await Promise.all([
+        const [all, pending, inProgress, done, pendingTasksResult] = await Promise.all([
           api('/api/tickets?limit=500' + fresh),
           api('/api/tickets?status=pending&limit=500' + fresh),
+          api('/api/tickets?status=in_progress&limit=500' + fresh),
           api('/api/tickets?status=done&limit=1' + fresh),
           api('/api/tasks?status=pending&limit=500' + fresh),
         ]);
-        if (!all.ok || !pending.ok || !done.ok || !pendingTasksResult.ok) throw new Error('Dashboard data could not be loaded.');
+        if (!all.ok || !pending.ok || !inProgress.ok || !done.ok || !pendingTasksResult.ok) throw new Error('Dashboard data could not be loaded.');
         const tickets = Array.isArray(all.data.tickets) ? all.data.tickets : [];
         dashboardTickets = tickets;
         const pendingTickets = Array.isArray(pending.data.tickets) ? pending.data.tickets : [];
-        const pendingTotal = Number(pending.data.total || 0);
+        const inProgressTickets = Array.isArray(inProgress.data.tickets) ? inProgress.data.tickets : [];
+        const openTickets = [...pendingTickets, ...inProgressTickets];
+        const openTotal = Number(pending.data.total || 0) + Number(inProgress.data.total || 0);
         const pendingTasks = Array.isArray(pendingTasksResult.data.tasks) ? pendingTasksResult.data.tasks : [];
-        el.combinedPendingTicketCount.textContent = toBnDigits(pendingTotal);
+        el.combinedPendingTicketCount.textContent = toBnDigits(openTotal);
         renderCombinedPendingQueue(pendingTasks);
         const doneTotal = Number(done.data.total || 0);
-        const total = Number(all.data.total ?? (pendingTotal + doneTotal));
+        const total = Number(all.data.total ?? (openTotal + doneTotal));
         const todayKey = dhakaDateKey(new Date());
         const today = tickets.filter((ticket) => dhakaDateKey(new Date(ticket.created_at)) === todayKey).length;
         const rate = total ? Math.round(doneTotal / total * 100) : 0;
         el.dashTotal.textContent = toBnDigits(total);
-        el.dashPending.textContent = toBnDigits(pendingTotal);
+        el.dashPending.textContent = toBnDigits(openTotal);
         el.dashDone.textContent = toBnDigits(doneTotal);
         el.dashToday.textContent = toBnDigits(today);
         el.dashboardCompletionRate.textContent = `${toBnDigits(rate)}%`;
         el.dashboardProgress.style.width = `${rate}%`;
         const circumference = 2 * Math.PI * 58;
         const doneLength = total ? doneTotal / total * circumference : 0;
-        const pendingLength = total ? pendingTotal / total * circumference : 0;
+        const pendingLength = total ? openTotal / total * circumference : 0;
         el.donutDone.setAttribute('stroke-dasharray', `${doneLength} ${circumference - doneLength}`);
         el.donutPending.setAttribute('stroke-dasharray', `${pendingLength} ${circumference - pendingLength}`);
         el.donutPending.setAttribute('stroke-dashoffset', `${-doneLength}`);
         el.donutDoneLabel.textContent = toBnDigits(doneTotal);
-        el.donutPendingLabel.textContent = toBnDigits(pendingTotal);
+        el.donutPendingLabel.textContent = toBnDigits(openTotal);
         el.donutTotalLabel.textContent = toBnDigits(total);
-        renderAssigneeWorkload(pendingTickets);
+        renderAssigneeWorkload(openTickets);
         renderDashboardViews();
         el.dashboardUpdated.textContent = `Updated ${new Intl.DateTimeFormat('bn-BD', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Dhaka' }).format(new Date())}`;
       } catch (error) {
@@ -1950,6 +2004,7 @@
 
     // ---------- ইভেন্ট ----------
     const taskAssignees = ['Rupok Kumar Roy', 'Towhedul Islam', 'Md. Imam Hossan Chowdhury', 'Muhammad Fokhrul Hasan', 'Md. Tanvir Ahamed Sarkar', 'Md. Fahad Hossen', 'Mabubul Alam Patwary'];
+    const taskAssigneeOptions = ['IT Team', ...taskAssignees];
     const taskStatusNames = { pending: 'Pending', in_progress: 'In progress', done: 'Done' };
 
     function setAssistantWorkspace(tasksMode) {
@@ -1979,25 +2034,27 @@
 
       el.assistantTitle.textContent = tasksMode ? 'Task Assistant' : 'Ticket Assistant';
       el.assistantDemoFlow.textContent = tasksMode
-        ? '1. Given by  →  2. Task details  →  3. Assign to'
+        ? '1. Task details  →  2. Given by (optional)  →  3. Assign to'
         : '1. Employee name  →  2. Problem  →  3. Assign by name';
       el.assistantDemoMessage.textContent = tasksMode
         ? 'Given by Mabubul. Training room printer setup korte hobe. Assign to Towhedul Islam.'
         : 'Sumaiya Islam-er laptop-e internet nei. Assign to Rupok Kumar Roy.';
       el.assistantSubtitle.textContent = tasksMode
-        ? 'Given by → task details → assign to'
+        ? 'Task details → optional Given by → assign to (defaults to IT Team)'
         : 'Employee name → problem → assign by name';
-      el.assistantInput.placeholder = tasksMode ? 'First, who gave this task?…' : 'Ask Ticket Assistant…';
+      el.assistantInput.placeholder = tasksMode ? 'Describe the task; Given by and Assign to are optional…' : 'Ask Ticket Assistant…';
       el.assistantPreviewNotice.textContent = assistantAIEnabled
         ? ''
         : tasksMode
-          ? 'Text chat works with the built-in parser. Start with who gave the task, describe the work, then choose an assignee.'
+          ? 'Text chat works with the built-in parser. Given by defaults to Md. Tanvir Ahamed Sarkar and an omitted assignee goes to IT Team.'
           : 'Text chat works with the built-in parser. Give the employee name, describe any issue, then choose an assignee.';
       el.assistantPreviewNotice.classList.toggle('hidden', !assistantEnabled || assistantAIEnabled);
       el.assistantMessages.replaceChildren();
-      appendAssistantMessage('assistant', tasksMode
-        ? 'Hello! First tell me who gave the task, then describe what needs to be done and who to assign it to.'
-        : 'Hello! Tell me the employee name and issue, then mention who to assign it to.');
+      const welcomeMessage = tasksMode
+        ? 'Hello! Describe the task in your own words. Given by defaults to Md. Tanvir Ahamed Sarkar, and without an individual assignee it goes to IT Team.'
+        : 'Hello! Tell me the employee name and issue, then mention who to assign it to.';
+      assistantConversation.push({ role: 'assistant', content: welcomeMessage });
+      appendAssistantMessage('assistant', welcomeMessage);
       el.assistantMessages.append(el.assistantPreviewNotice);
 
       const taskPrompts = [
@@ -2015,7 +2072,7 @@
         }
       });
       el.assistantStatus.textContent = tasksMode
-        ? (assistantEnabled ? (assistantAIEnabled ? 'Task chat ready · Given by → task details → assign to.' : 'Built-in task chat ready · voice availability is shown above.') : 'Chat service is unavailable. Check the app connection and refresh.')
+        ? (assistantEnabled ? (assistantAIEnabled ? 'Task chat ready · task details first; Given by and Assign to have defaults.' : 'Built-in task chat ready · voice availability is shown above.') : 'Chat service is unavailable. Check the app connection and refresh.')
         : (assistantEnabled ? (assistantAIEnabled ? 'Ticket chat ready · create pending tickets by text or voice.' : 'Built-in ticket chat ready · voice availability is shown above.') : 'Chat service is unavailable. Check the app connection and refresh.');
     }
 
@@ -2111,12 +2168,12 @@
 
       const ownerCounts = new Map();
       entries.filter((task) => task.status !== 'done').forEach((task) => {
-        const owner = task.assigned_to || 'Unassigned';
+        const owner = task.assigned_to || 'IT Team';
         ownerCounts.set(owner, (ownerCounts.get(owner) || 0) + 1);
       });
       const owners = [...ownerCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
       const ownerMax = Math.max(0, ...owners.map(([, value]) => value));
-      el.taskOwnerChart.replaceChildren(...(owners.length ? owners.map(([label, value]) => createTaskBar(label, value, ownerMax, label === 'Unassigned' ? 'amber' : 'teal')) : [Object.assign(document.createElement('p'), { className: 'task-analytics-empty', textContent: 'No active tasks in this range.' })]));
+      el.taskOwnerChart.replaceChildren(...(owners.length ? owners.map(([label, value]) => createTaskBar(label, value, ownerMax, 'teal')) : [Object.assign(document.createElement('p'), { className: 'task-analytics-empty', textContent: 'No active tasks in this range.' })]));
 
       const monthBuckets = [];
       const now = new Date();
@@ -2147,11 +2204,59 @@
       const select = document.createElement('select');
       select.className = 'task-inline-select';
       select.setAttribute('aria-label', `Assign ${task.title}`);
-      const unassigned = new Option('Unassigned', '');
-      select.append(unassigned);
-      taskAssignees.forEach((name) => select.append(new Option(name, name)));
-      select.value = task.assigned_to || '';
+      taskAssigneeOptions.forEach((name) => select.append(new Option(name, name)));
+      select.value = task.assigned_to || 'IT Team';
       select.addEventListener('change', () => updateTask(task.id, { assigned_to: select.value }, select));
+      return select;
+    }
+
+    function taskDisplayFields(task) {
+      let createdBy = String(task.created_by || '').trim();
+      let description = String(task.description || '').trim();
+      const knownCreator = [...taskAssignees]
+        .sort((a, b) => b.length - a.length)
+        .find((name) => createdBy.toLocaleLowerCase().startsWith(name.toLocaleLowerCase())
+          && !/[\p{L}\p{N}]/u.test(createdBy.slice(name.length, name.length + 1)));
+      if (knownCreator && createdBy.length > knownCreator.length) {
+        let extra = createdBy.slice(knownCreator.length).trim();
+        extra = extra.replace(/^['".,:;\s-]+/, '');
+        extra = extra.replace(/^(?:er|r|'s|’s|\u098f\u09b0)\s+/i, '');
+        extra = extra.replace(/\b(?:assign(?:ed|ee|ing)?|assing)\b.*$/i, '').trim();
+        extra = extra.replace(/\b(?:assign|assing)(?:ed|ee|ing)?(?=[A-Z]).*$/, '').trim();
+        if (extra) description = [extra, description].filter(Boolean).join(' ');
+        createdBy = knownCreator;
+      } else {
+        const inline = createdBy.match(/^(.+?)(?:-er|\s+er|\s+r|'s|’s|[- ]\u098f\u09b0)\s*(.+)$/i);
+        if (inline) {
+          const inferredCreator = inline[1].trim();
+          let extra = inline[2].trim().replace(/\b(?:assign(?:ed|ee|ing)?|assing)\b.*$/i, '').trim();
+          if (inferredCreator && extra) {
+            createdBy = inferredCreator;
+            description = [extra, description].filter(Boolean).join(' ');
+          }
+        }
+      }
+      return { createdBy: createdBy || 'Md. Tanvir Ahamed Sarkar', description };
+    }
+
+    function taskCreatorSelect(task) {
+      const select = document.createElement('select');
+      select.className = 'task-inline-select';
+      select.setAttribute('aria-label', `Given by for ${task.title}`);
+      const display = taskDisplayFields(task);
+      const current = display.createdBy;
+      if (!current) {
+        const missing = new Option('Not recorded', '');
+        missing.disabled = true;
+        select.append(missing);
+      } else if (!taskAssignees.includes(current)) {
+        select.append(new Option(`${current} (current)`, current));
+      }
+      taskAssignees.forEach((name) => select.append(new Option(name, name)));
+      select.value = current;
+      select.addEventListener('change', () => {
+        if (select.value) updateTask(task.id, { created_by: select.value, description: display.description }, select);
+      });
       return select;
     }
 
@@ -2168,11 +2273,17 @@
     function createTaskCard(task) {
       const card = document.createElement('article');
       card.className = `task-card${task.status === 'done' ? ' is-done' : ''}`;
+      const display = taskDisplayFields(task);
       const top = document.createElement('div'); top.className = 'task-card-topline';
       const number = document.createElement('span'); number.className = 'task-number'; number.textContent = `TSK-${String(task.id).padStart(6, '0')}`;
       top.append(number);
-      const description = document.createElement('p'); description.className = 'task-card-description'; description.textContent = task.description || 'No extra details';
-      const requester = document.createElement('p'); requester.className = 'task-card-meta text-xs text-slate-500'; requester.textContent = `Given by: ${task.created_by || 'Not recorded'}`;
+      const problemBox = document.createElement('div'); problemBox.className = 'task-problem-box';
+      const problemLabel = document.createElement('span'); problemLabel.className = 'task-problem-label'; problemLabel.textContent = 'PROBLEM / TASK DETAILS';
+      const description = document.createElement('p'); description.className = 'task-card-description'; description.textContent = display.description || 'No extra details';
+      problemBox.append(problemLabel, description);
+      const requester = document.createElement('div'); requester.className = 'task-card-meta task-card-owner task-card-requester';
+      const requesterLabel = document.createElement('span'); requesterLabel.textContent = 'GIVEN BY';
+      requester.append(requesterLabel, taskCreatorSelect(task));
       const footer = document.createElement('div'); footer.className = 'task-card-footer';
       const owner = document.createElement('div'); owner.className = 'task-card-owner';
       const ownerLabel = document.createElement('span'); ownerLabel.textContent = 'OWNER';
@@ -2181,7 +2292,7 @@
       actions.append(taskStatusSelect(task));
       const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'task-edit-button'; edit.textContent = 'Edit';
       edit.addEventListener('click', () => beginTaskEdit(task));
-      actions.append(edit); footer.append(owner, actions); card.append(top, description, requester, footer);
+      actions.append(edit); footer.append(owner, actions); card.append(top, problemBox, requester, footer);
       return card;
     }
     function renderTaskBoard() {
@@ -2266,12 +2377,13 @@
 
     function beginTaskEdit(task) {
       editingTaskId = task.id;
+      const display = taskDisplayFields(task);
       el.taskCreatorCustomInput.value = '';
       el.taskCreatorCustomInput.required = false;
       el.taskCreatorCustomWrap.classList.add('hidden');
-      el.taskDescriptionInput.value = task.description || '';
-      setTaskCreatorValue(task.created_by);
-      el.taskAssigneeInput.value = task.assigned_to || '';
+      el.taskDescriptionInput.value = display.description;
+      setTaskCreatorValue(display.createdBy);
+      el.taskAssigneeInput.value = task.assigned_to || 'IT Team';
       el.taskFormTitle.textContent = 'Edit task';
       el.taskSubmitButton.textContent = 'Save changes';
       el.taskCancelEditButton.classList.remove('hidden');

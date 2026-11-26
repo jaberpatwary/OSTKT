@@ -9,7 +9,11 @@ import (
 	"ticket-system/internal/domain"
 )
 
-const MaxTaskLimit = 500
+const (
+	MaxTaskLimit        = 500
+	DefaultTaskCreator  = "Md. Tanvir Ahamed Sarkar"
+	DefaultTaskAssignee = "IT Team"
+)
 
 var (
 	ErrTaskTitleRequired      = errors.New("task title is required")
@@ -65,12 +69,15 @@ func (s *TaskService) Create(ctx context.Context, input CreateTaskInput) (domain
 	}
 	createdBy := strings.TrimSpace(input.CreatedBy)
 	if createdBy == "" {
-		return domain.Task{}, ErrTaskCreatorRequired
+		createdBy = DefaultTaskCreator
 	}
 	if len([]rune(createdBy)) > 100 {
 		return domain.Task{}, ErrTaskCreatorTooLong
 	}
 	assignee := strings.TrimSpace(input.AssignedTo)
+	if assignee == "" {
+		assignee = DefaultTaskAssignee
+	}
 	if len([]rune(assignee)) > 100 {
 		return domain.Task{}, ErrTaskAssigneeTooLong
 	}
@@ -124,7 +131,7 @@ func (s *TaskService) Update(ctx context.Context, id uint, input UpdateTaskInput
 	if input.CreatedBy != nil {
 		createdBy := strings.TrimSpace(*input.CreatedBy)
 		if createdBy == "" {
-			return domain.Task{}, ErrTaskCreatorRequired
+			createdBy = DefaultTaskCreator
 		}
 		if len([]rune(createdBy)) > 100 {
 			return domain.Task{}, ErrTaskCreatorTooLong
@@ -133,6 +140,9 @@ func (s *TaskService) Update(ctx context.Context, id uint, input UpdateTaskInput
 	}
 	if input.AssignedTo != nil {
 		assignee := strings.TrimSpace(*input.AssignedTo)
+		if assignee == "" {
+			assignee = DefaultTaskAssignee
+		}
 		if len([]rune(assignee)) > 100 {
 			return domain.Task{}, ErrTaskAssigneeTooLong
 		}

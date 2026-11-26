@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 
@@ -26,7 +27,9 @@ type TicketUseCase interface {
 	ListEmployees() []domain.Employee
 	Create(ctx context.Context, input usecase.CreateTicketInput) (domain.Ticket, bool, error)
 	Complete(ctx context.Context, key string) (usecase.CompleteTicketResult, error)
+	SetStatus(ctx context.Context, key, status string) (domain.Ticket, bool, error)
 	Assign(ctx context.Context, key, assignee string) (domain.Ticket, error)
+	SetPriority(ctx context.Context, key, priority string) (domain.Ticket, error)
 	Get(ctx context.Context, key string) (domain.Ticket, error)
 	List(ctx context.Context, status string, from, until time.Time, limit int) ([]domain.Ticket, int64, error)
 }
@@ -43,6 +46,8 @@ type ticketView struct {
 	Employee     domain.Employee `json:"employee"`
 	Problem      string          `json:"problem"`
 	AssignedTo   string          `json:"assigned_to"`
+	Priority     string          `json:"priority"`
+	SLADueAt     time.Time       `json:"sla_due_at"`
 	Status       string          `json:"status"`
 	EmailQueued  bool            `json:"email_queued"`
 	EmailSentAt  *time.Time      `json:"email_sent_at"`
@@ -63,13 +68,22 @@ type taskView struct {
 }
 
 func toTaskView(task domain.Task) taskView {
-	return taskView{ID: task.ID, Title: task.Title, Description: task.Description, CreatedBy: task.CreatedBy, AssignedTo: task.AssignedTo, Priority: task.Priority, DueDate: task.DueDate, Status: task.Status, CreatedAt: task.CreatedAt, UpdatedAt: task.UpdatedAt}
+	createdBy := strings.TrimSpace(task.CreatedBy)
+	if createdBy == "" {
+		createdBy = usecase.DefaultTaskCreator
+	}
+	assignedTo := strings.TrimSpace(task.AssignedTo)
+	if assignedTo == "" {
+		assignedTo = usecase.DefaultTaskAssignee
+	}
+	return taskView{ID: task.ID, Title: task.Title, Description: task.Description, CreatedBy: createdBy, AssignedTo: assignedTo, Priority: task.Priority, DueDate: task.DueDate, Status: task.Status, CreatedAt: task.CreatedAt, UpdatedAt: task.UpdatedAt}
 }
 
 func toView(ticket domain.Ticket, emailQueued bool) ticketView {
 	return ticketView{
 		ID: ticket.ID, TicketNumber: ticket.TicketNumber, Employee: ticket.Employee(),
 		Status: ticket.Status, Problem: ticket.Problem, AssignedTo: ticket.AssignedTo,
+		Priority: ticket.Priority, SLADueAt: ticket.SLADueAt,
 		EmailQueued: emailQueued, EmailSentAt: ticket.EmailSentAt,
 		CreatedAt: ticket.CreatedAt,
 	}
@@ -148,7 +162,9 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 	api.POST("/tickets", handler.createTicket)
 	api.GET("/tickets/:id", handler.getTicket)
 	api.POST("/tickets/:id/done", handler.markDone)
+	api.PATCH("/tickets/:id/status", handler.setTicketStatus)
 	api.PUT("/tickets/:id/assignee", handler.assignTicket)
+	api.PATCH("/tickets/:id/priority", handler.setTicketPriority)
 	api.GET("/tasks", handler.listTasks)
 	api.POST("/tasks", handler.createTask)
 	api.PATCH("/tasks/:id", handler.updateTask)
@@ -248,6 +264,38 @@ func resolveAssistantAssignee(value string) string {
 	return assistantAssigneeAliases[key]
 }
 
+// resolveAssistantAssigneeMention accepts a unique first-name mention while
+// still resolving it against the configured IT team only.
+func resolveAssistantAssigneeMention(value string) string {
+	value = strings.TrimSpace(strings.Trim(value, " \t\r\n.,:;()\"'"))
+	if name := resolveAssistantAssignee(value); name != "" {
+		return name
+	}
+	key := normalizeAssistantPersonName(value)
+	if key == "" {
+		return ""
+	}
+	var match string
+	for _, name := range assistantAssignees {
+		canonical := normalizeAssistantPersonName(name)
+		if strings.HasPrefix(canonical, key+" ") {
+			if match != "" {
+				return ""
+			}
+			match = name
+		}
+	}
+	return match
+}
+
+func resolveTaskAssigneeMention(value string) string {
+	value = strings.TrimSpace(strings.Trim(value, " \t\r\n.,:;()\"'"))
+	if strings.EqualFold(value, usecase.DefaultTaskAssignee) {
+		return usecase.DefaultTaskAssignee
+	}
+	return resolveAssistantAssigneeMention(value)
+}
+
 func normalizeAssistantValue(value string) string {
 	return strings.ToLower(strings.Join(strings.Fields(value), " "))
 }
@@ -339,70 +387,229 @@ func fallbackTicketDetails(messages []groqapi.Message, employees []domain.Employ
 }
 
 func fallbackAssigneeFromText(text string) string {
-	match := regexp.MustCompile(`(?i)(?:assign(?:ed|ee)?|assing|give)\s*(?:to|by)?\s*(.+)$`).FindStringSubmatch(text)
-	if len(match) < 2 {
-		if m := regexp.MustCompile(`(?i)([\pL.]+(?:\s+[\pL.]+){0,3})\s+ke\s+dao\s*$`).FindStringSubmatch(text); len(m) > 1 {
-			return resolveAssistantAssignee(m[1])
+	match := regexp.MustCompile(`(?i)\b(?:assign|assing)(?:ed|ee|ing)?\s*(?:to\s*)?(.+)$`).FindStringSubmatch(text)
+	if len(match) > 1 {
+		clause := regexp.MustCompile(`(?i)\b(?:for|because|priority|due|task details|description)\b.*$`).ReplaceAllString(match[1], "")
+		clause = strings.TrimSpace(strings.Trim(clause, " \t\r\n.,:;()\"'"))
+		if name := resolveAssistantAssigneeMention(clause); name != "" {
+			return name
 		}
-		return ""
-	}
-	clause := strings.ToLower(match[1])
-	for _, assignee := range assistantAssignees {
-		if strings.Contains(clause, strings.ToLower(assignee)) {
-			return assignee
+		words := strings.Fields(clause)
+		for size := 1; size <= len(words) && size <= 5; size++ {
+			if name := resolveAssistantAssigneeMention(strings.Join(words[:size], " ")); name != "" {
+				return name
+			}
 		}
 	}
-	if strings.Contains(clause, "jaber") {
-		return resolveAssistantAssignee("jaber")
+	if m := regexp.MustCompile(`(?i)([\pL.]+(?:\s+[\pL.]+){0,4})\s+ke\s+dao\b`).FindStringSubmatch(text); len(m) > 1 {
+		return resolveAssistantAssigneeMention(m[1])
 	}
 	return ""
 }
 
+func stripTaskAssignmentClause(text string) string {
+	if fallbackTaskAssigneeFromText(text) == "" {
+		return text
+	}
+	if index := regexp.MustCompile(`(?i)\b(?:assign|assing)(?:ed|ee|ing)?\s*(?:to\s*)?`).FindStringIndex(text); index != nil {
+		return text[:index[0]]
+	}
+	if index := regexp.MustCompile(`(?i)[\pL.]+(?:\s+[\pL.]+){0,4}\s+ke\s+dao\b`).FindStringIndex(text); index != nil {
+		return text[:index[0]]
+	}
+	return text
+}
+
+func fallbackTaskAssigneeFromText(text string) string {
+	if assignee := fallbackAssigneeFromText(text); assignee != "" {
+		return assignee
+	}
+	match := regexp.MustCompile(`(?i)\b(?:assign|assing)(?:ed|ee|ing)?\s*(?:to\s*)?(it\s*team)\b`).FindStringSubmatch(text)
+	if len(match) > 1 {
+		return usecase.DefaultTaskAssignee
+	}
+	return ""
+}
+
+func isTaskGreeting(text string) bool {
+	value := strings.ToLower(strings.TrimSpace(text))
+	value = strings.Trim(value, " .,!?:;\t\r\n")
+	switch value {
+	case "hi", "hello", "hey", "hii", "helo", "good morning", "good afternoon", "good evening", "salam", "assalamu alaikum", "assalamualaikum", "আসসালামু আলাইকুম", "হ্যালো", "হাই":
+		return true
+	default:
+		return false
+	}
+}
+
+func taskAssistantPromptSlot(text string) string {
+	value := strings.ToLower(text)
+	if strings.Contains(value, "who gave") || strings.Contains(value, "given by") || strings.Contains(value, "who requested") || strings.Contains(value, "task creator") {
+		return "creator"
+	}
+	if strings.Contains(value, "what needs to be done") || strings.Contains(value, "task details") || strings.Contains(value, "describe the work") || strings.Contains(value, "what task") {
+		return "description"
+	}
+	if strings.Contains(value, "assign to") || strings.Contains(value, "who should i assign") || strings.Contains(value, "assignee") || strings.Contains(value, "who to assign") {
+		return "assignee"
+	}
+	if strings.Contains(value, "what needs to be done") || strings.Contains(value, "task details") || strings.Contains(value, "describe the work") || strings.Contains(value, "what task") || strings.Contains(value, "কী কাজ") || strings.Contains(value, "কি কাজ") {
+		return "description"
+	}
+	return ""
+}
+
+func extractTaskCreator(text string) string {
+	match := regexp.MustCompile(`(?i)(?:given\s*by|requested\s*by|task\s*creator)\s*[:=]?\s*(.+)`).FindStringSubmatch(text)
+	if len(match) < 2 {
+		return ""
+	}
+	name := regexp.MustCompile(`(?i)\b(?:task\s*details|description|assign(?:ed|ee|ing)?\s*(?:to)?|priority|due\s*date)\b.*$`).ReplaceAllString(match[1], "")
+	if index := strings.IndexAny(name, ",;\n\""); index >= 0 {
+		name = name[:index]
+	}
+	for index := 0; index+1 < len(name); index++ {
+		if name[index] != '.' || name[index+1] != ' ' {
+			continue
+		}
+		words := strings.Fields(name[:index])
+		if len(words) == 0 {
+			continue
+		}
+		abbreviation := strings.ToLower(strings.Trim(words[len(words)-1], "."))
+		if abbreviation == "md" || abbreviation == "mr" || abbreviation == "mrs" || abbreviation == "ms" || abbreviation == "dr" {
+			continue
+		}
+		name = name[:index]
+		break
+	}
+	name = strings.TrimSpace(strings.Trim(name, " .,:;\t\r\n\"'"))
+	if isTaskGreeting(name) || len([]rune(name)) > 100 {
+		return ""
+	}
+	return name
+}
+
+func extractInlineTaskCreator(text string) (string, string) {
+	// Accept a known team member as the leading creator without requiring a
+	// "Given by:" label. Unknown leading words stay part of the free-form task.
+	text = strings.TrimSpace(text)
+	creatorNames := append([]string(nil), assistantAssignees...)
+	sort.Slice(creatorNames, func(i, j int) bool { return len(creatorNames[i]) > len(creatorNames[j]) })
+	for _, name := range creatorNames {
+		if len(text) < len(name) || !strings.EqualFold(text[:len(name)], name) {
+			continue
+		}
+		remainder := text[len(name):]
+		if remainder != "" {
+			first, _ := utf8.DecodeRuneInString(remainder)
+			if unicode.IsLetter(first) || unicode.IsNumber(first) {
+				continue
+			}
+			remainder = regexp.MustCompile(`(?i)^(?:-er|er|r|'s|’s)\s*`).ReplaceAllString(remainder, "")
+		}
+		remainder = strings.TrimSpace(remainder)
+		remainder = regexp.MustCompile(`(?i)^(?:-er|er|r|'s|’s)\s+`).ReplaceAllString(remainder, "")
+		return name, cleanTaskDescription(remainder, "")
+	}
+	return "", ""
+}
+
+func removeTaskCreatorMarker(text, creator string) string {
+	if creator == "" {
+		return text
+	}
+	pattern := `(?i)(?:given\s*by|requested\s*by|task\s*creator)\s*[:=]?\s*` + regexp.QuoteMeta(creator)
+	return regexp.MustCompile(pattern).ReplaceAllString(text, " ")
+}
+
+func cleanTaskDescription(text, creator string) string {
+	text = removeTaskCreatorMarker(text, creator)
+	text = strings.TrimLeft(text, " \t\r\n.,:;")
+	text = regexp.MustCompile(`(?i)^\s*(?:task\s*details|description|work)\s*[:=]\s*`).ReplaceAllString(text, "")
+	text = stripTaskAssignmentClause(text)
+	text = regexp.MustCompile(`(?i)\b(?:priority|due\s*date)\s*[:=]?.*$`).ReplaceAllString(text, " ")
+	return strings.TrimSpace(strings.Trim(text, " \t\r\n.,:;\"'"))
+}
+
+// fallbackTaskDetails only fills task fields from explicit user input or a
+// direct answer to the assistant's current question. AI output is not evidence
+// that the user supplied a required field.
 func fallbackTaskDetails(messages []groqapi.Message, selectedAssignee string) groqapi.TaskDetails {
 	var userText strings.Builder
 	createdBy, description := "", ""
-	askedForCreator, askedForDescription := false, false
-	creatorOnlyAnswer := false
+	askedSlot := ""
+	promptAssignee := ""
 	for _, message := range messages {
 		content := strings.TrimSpace(message.Content)
-		lower := strings.ToLower(content)
 		if message.Role == "assistant" {
-			askedForCreator = strings.Contains(lower, "who gave") || strings.Contains(lower, "given by")
-			askedForDescription = strings.Contains(lower, "what needs to be done") || strings.Contains(lower, "task-এ কী কাজ")
-			if askedForDescription {
-				creatorOnlyAnswer = false
+			if slot := taskAssistantPromptSlot(content); slot != "" {
+				askedSlot = slot
 			}
 			continue
 		}
 		if message.Role != "user" {
 			continue
 		}
+		slot := askedSlot
+		askedSlot = ""
 		userText.WriteByte(' ')
 		userText.WriteString(content)
-		if m := regexp.MustCompile(`(?i)(?:given\s*by|request(?:ed)?\s*by)\s*[:=]?\s*([\pL.]+(?:\s+[\pL.]+){0,3})`).FindStringSubmatch(content); len(m) > 1 {
-			createdBy = strings.TrimSpace(m[1])
-		} else if askedForCreator && !strings.Contains(lower, "assign") {
-			createdBy = content
-			creatorOnlyAnswer = true
+		if isTaskGreeting(content) {
+			continue
 		}
-		if strings.Contains(lower, "task details:") {
-			description = strings.TrimSpace(content[strings.Index(lower, "task details:")+13:])
-			creatorOnlyAnswer = false
-		} else if askedForDescription {
-			description = content
-			creatorOnlyAnswer = false
+
+		creator := extractTaskCreator(content)
+		inlineDescription := ""
+		creatorWasBareAnswer := false
+		if creator == "" && slot == "creator" {
+			creator, inlineDescription = extractInlineTaskCreator(content)
+			creatorWasBareAnswer = creator != "" && inlineDescription == ""
+			if creator == "" && inlineDescription == "" {
+				creator = resolveAssistantAssigneeMention(content)
+				creatorWasBareAnswer = creator != ""
+			}
+		}
+		if slot == "assignee" {
+			promptAssignee = resolveTaskAssigneeMention(content)
+		}
+		if creator != "" {
+			createdBy = creator
+		}
+
+		if inlineDescription != "" {
+			description = inlineDescription
+		} else if marker := regexp.MustCompile(`(?i)(?:task\s*details|description|work)\s*[:=]\s*(.*)`).FindStringSubmatch(content); len(marker) > 1 {
+			description = cleanTaskDescription(marker[1], "")
+		} else if slot == "description" {
+			description = cleanTaskDescription(content, creator)
+		} else if slot == "assignee" {
+			// Assignee-only answers must not replace the task description.
+		} else if creator != "" && !creatorWasBareAnswer {
+			// Free-form task descriptions remain unrestricted. Remove only the
+			// creator and explicit assignment metadata around the user's text.
+			desc := cleanTaskDescription(content, creator)
+			if desc != "" {
+				description = desc
+			}
+		} else if creator == "" {
+			// Given by is optional. Preserve free-form task details and let the
+			// task service supply its configured default creator.
+			desc := cleanTaskDescription(content, "")
+			if desc != "" {
+				description = desc
+			}
 		}
 	}
-	all := userText.String()
-	if description == "" && !creatorOnlyAnswer {
-		description = regexp.MustCompile(`(?i)given\s*by\s*[:=]?\s*[\pL.]+(?:\s+[\pL.]+){0,3}[,.]?`).ReplaceAllString(all, " ")
-		description = regexp.MustCompile(`(?i)assign(?:ed)?\s*(?:to|by)?\s*[\pL.]+(?:\s+[\pL.]+){0,5}`).ReplaceAllString(description, " ")
-	}
-	description = strings.TrimSpace(strings.Trim(description, " ,:;.-"))
-	assignee := resolveAssistantAssignee(selectedAssignee)
+
+	assignee := resolveTaskAssigneeMention(selectedAssignee)
 	if assignee == "" {
-		assignee = fallbackAssigneeFromText(all)
+		assignee = fallbackTaskAssigneeFromText(userText.String())
 	}
+	if assignee == "" {
+		assignee = promptAssignee
+	}
+	description = strings.TrimSpace(description)
 	title := description
 	if len([]rune(title)) > 160 {
 		title = string([]rune(title)[:160])
@@ -697,6 +904,29 @@ func (h *Handler) assistantTaskChat(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "conversation is too long or does not end with a user message"})
 		return
 	}
+	fallback := fallbackTaskDetails(request.Messages, request.SelectedAssignee)
+	if fallback.CreatedBy == "" {
+		fallback.CreatedBy = usecase.DefaultTaskCreator
+	}
+	if fallback.Description == "" {
+		c.JSON(http.StatusOK, gin.H{"reply": "What needs to be done? Please describe the task details."})
+		return
+	}
+	if len([]rune(fallback.Description)) > 2000 {
+		c.JSON(http.StatusOK, gin.H{"reply": "Please keep the task description under 2,000 characters."})
+		return
+	}
+	assignee := fallback.Assignee
+	if selected := strings.TrimSpace(request.SelectedAssignee); selected != "" {
+		assignee = resolveTaskAssigneeMention(selected)
+		if assignee == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "selected assignee is invalid; choose an IT Team member or IT Team"})
+			return
+		}
+	}
+	if assignee == "" {
+		assignee = usecase.DefaultTaskAssignee
+	}
 	var details groqapi.TaskDetails
 	if h.assistant.Enabled() {
 		var err error
@@ -705,7 +935,6 @@ func (h *Handler) assistantTaskChat(c *gin.Context) {
 			log.Printf("task assistant extraction failed; using programming fallback: %v", err)
 		}
 	}
-	fallback := fallbackTaskDetails(request.Messages, request.SelectedAssignee)
 	if details.Title == "" {
 		details.Title = fallback.Title
 	}
@@ -724,18 +953,23 @@ func (h *Handler) assistantTaskChat(c *gin.Context) {
 	details.Assignee = strings.TrimSpace(details.Assignee)
 	details.Priority = "medium"
 	details.DueDate = ""
+	// Use only user-provided task fields; the AI may help interpret input but
+	// cannot invent missing creator, work details, or assignee values.
+	details.Title = fallback.Title
+	details.Description = fallback.Description
+	details.CreatedBy = fallback.CreatedBy
+	details.Assignee = assignee
 	if selected := strings.TrimSpace(request.SelectedAssignee); selected != "" {
-		details.Assignee = resolveAssistantAssignee(selected)
+		details.Assignee = resolveTaskAssigneeMention(selected)
 		if details.Assignee == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "selected assignee is invalid"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "selected assignee is invalid; choose an IT Team member or IT Team"})
 			return
 		}
 	} else if details.Assignee != "" {
-		details.Assignee = resolveAssistantAssignee(details.Assignee)
+		details.Assignee = resolveTaskAssigneeMention(details.Assignee)
 	}
 	if details.CreatedBy == "" {
-		c.JSON(http.StatusOK, gin.H{"reply": "প্রথমে বলুন—এই task-টি কে দিয়েছেন? Given by নামটি বলুন।"})
-		return
+		details.CreatedBy = usecase.DefaultTaskCreator
 	}
 	if len([]rune(details.CreatedBy)) > 100 {
 		c.JSON(http.StatusOK, gin.H{"reply": "Given by নামটি ১০০ অক্ষরের মধ্যে ছোট করে বলুন।"})
@@ -759,8 +993,7 @@ func (h *Handler) assistantTaskChat(c *gin.Context) {
 		}
 	}
 	if details.Assignee == "" {
-		c.JSON(http.StatusOK, gin.H{"reply": "এবার IT Team থেকে কাকে assign করব? নামটি বলুন বা তালিকা থেকে বেছে নিন।", "needs_assignee": true})
-		return
+		details.Assignee = usecase.DefaultTaskAssignee
 	}
 	if len([]rune(details.Title)) > 160 {
 		c.JSON(http.StatusOK, gin.H{"reply": "Task-এর শিরোনামটি ১৬০ অক্ষরের মধ্যে ছোট করে বলুন।"})
@@ -819,10 +1052,35 @@ type createTicketRequest struct {
 	Status     string `json:"status"`
 	Problem    string `json:"problem"`
 	AssignedTo string `json:"assigned_to"`
+	Priority   string `json:"priority"`
 }
 
 type assignTicketRequest struct {
 	Assignee string `json:"assignee"`
+}
+
+type setTicketStatusRequest struct {
+	Status string `json:"status"`
+}
+
+func (h *Handler) setTicketStatus(c *gin.Context) {
+	var request setTicketStatusRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON request"})
+		return
+	}
+	ticket, emailQueued, err := h.tickets.SetStatus(c.Request.Context(), c.Param("id"), request.Status)
+	switch err {
+	case nil:
+		c.JSON(http.StatusOK, toView(ticket, emailQueued))
+	case usecase.ErrInvalidStatus:
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case domain.ErrNotFound:
+		c.JSON(http.StatusNotFound, gin.H{"error": "ticket not found"})
+	default:
+		log.Printf("ticket status update failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update ticket status"})
+	}
 }
 
 func (h *Handler) assignTicket(c *gin.Context) {
@@ -845,6 +1103,30 @@ func (h *Handler) assignTicket(c *gin.Context) {
 	}
 }
 
+type setTicketPriorityRequest struct {
+	Priority string `json:"priority"`
+}
+
+func (h *Handler) setTicketPriority(c *gin.Context) {
+	var request setTicketPriorityRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON request"})
+		return
+	}
+	ticket, err := h.tickets.SetPriority(c.Request.Context(), c.Param("id"), request.Priority)
+	switch err {
+	case nil:
+		c.JSON(http.StatusOK, toView(ticket, false))
+	case usecase.ErrInvalidPriority:
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case domain.ErrNotFound:
+		c.JSON(http.StatusNotFound, gin.H{"error": "ticket not found"})
+	default:
+		log.Printf("ticket priority update failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update ticket priority"})
+	}
+}
+
 func (h *Handler) createTicket(c *gin.Context) {
 	var request createTicketRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -853,7 +1135,7 @@ func (h *Handler) createTicket(c *gin.Context) {
 	}
 	ticket, emailQueued, err := h.tickets.Create(c.Request.Context(), usecase.CreateTicketInput{
 		Name: request.Name, EmployeeID: request.EmployeeID, Status: request.Status,
-		Problem: request.Problem, AssignedTo: request.AssignedTo,
+		Problem: request.Problem, AssignedTo: request.AssignedTo, Priority: request.Priority,
 	})
 	if err != nil {
 		h.writeCreateError(c, err)
@@ -865,12 +1147,12 @@ func (h *Handler) createTicket(c *gin.Context) {
 func (h *Handler) writeCreateError(c *gin.Context, err error) {
 	switch {
 	case err == usecase.ErrInvalidStatus:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "status must be 'done' or 'pending'"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "status must be 'pending', 'in_progress', or 'done'"})
 	case err == usecase.ErrEmployeeMissing:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "employee name is required"})
 	case err == usecase.ErrEmployeeUnknown:
 		c.JSON(http.StatusNotFound, gin.H{"error": "employee not found"})
-	case err == usecase.ErrProblemRequired, err == usecase.ErrProblemTooLong, err == usecase.ErrAssigneeTooLong:
+	case err == usecase.ErrProblemRequired, err == usecase.ErrProblemTooLong, err == usecase.ErrAssigneeTooLong, err == usecase.ErrInvalidPriority:
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	default:
 		if ambiguous, ok := err.(*usecase.AmbiguousEmployeeError); ok {
@@ -943,7 +1225,7 @@ func (h *Handler) listTickets(c *gin.Context) {
 	tickets, total, err := h.tickets.List(c.Request.Context(), status, from, until, limit)
 	if err != nil {
 		if err == usecase.ErrInvalidFilter {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "status must be 'done' or 'pending'"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "status must be 'pending', 'in_progress', or 'done'"})
 			return
 		}
 		log.Printf("ticket list failed: %v", err)
@@ -1016,9 +1298,9 @@ func (h *Handler) createTask(c *gin.Context) {
 	}
 	assignee := strings.TrimSpace(request.AssignedTo)
 	if assignee != "" {
-		assignee = resolveAssistantAssignee(assignee)
+		assignee = resolveTaskAssigneeMention(assignee)
 		if assignee == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "choose an IT Team member from the list"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "choose an IT Team member or IT Team from the list"})
 			return
 		}
 	}
@@ -1049,9 +1331,9 @@ func (h *Handler) updateTask(c *gin.Context) {
 		return
 	}
 	if request.AssignedTo != nil && strings.TrimSpace(*request.AssignedTo) != "" {
-		resolved := resolveAssistantAssignee(*request.AssignedTo)
+		resolved := resolveTaskAssigneeMention(*request.AssignedTo)
 		if resolved == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "choose an IT Team member from the list"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "choose an IT Team member or IT Team from the list"})
 			return
 		}
 		request.AssignedTo = &resolved

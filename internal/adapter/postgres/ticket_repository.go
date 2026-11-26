@@ -22,11 +22,14 @@ type ticketRecord struct {
 	Department   string
 	Problem      string
 	AssignedTo   string
+	Priority     string `gorm:"default:medium"`
+	SLADueAt     time.Time
 	Email        string
 	Phone        string
 	Status       string `gorm:"default:pending"`
 	EmailSentAt  *time.Time
 	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 func (ticketRecord) TableName() string { return "tickets" }
@@ -43,21 +46,30 @@ func recordFromDomain(ticket *domain.Ticket) ticketRecord {
 		ID: ticket.ID, TicketNumber: ticket.TicketNumber,
 		EmployeeName: ticket.EmployeeName, EmployeeID: ticket.EmployeeID,
 		Department: ticket.Department, Problem: ticket.Problem,
-		AssignedTo: ticket.AssignedTo, Email: ticket.Email, Phone: ticket.Phone,
+		AssignedTo: ticket.AssignedTo, Priority: ticket.Priority, SLADueAt: ticket.SLADueAt,
+		Email: ticket.Email, Phone: ticket.Phone,
 		Status:      ticket.Status,
-		EmailSentAt: ticket.EmailSentAt, CreatedAt: ticket.CreatedAt,
+		EmailSentAt: ticket.EmailSentAt, CreatedAt: ticket.CreatedAt, UpdatedAt: ticket.UpdatedAt,
 	}
 }
 
 func (record ticketRecord) toDomain() domain.Ticket {
-	return domain.Ticket{
+	ticket := domain.Ticket{
 		ID: record.ID, TicketNumber: record.TicketNumber,
 		EmployeeName: record.EmployeeName, EmployeeID: record.EmployeeID,
 		Department: record.Department, Problem: record.Problem,
-		AssignedTo: record.AssignedTo, Email: record.Email, Phone: record.Phone,
+		AssignedTo: record.AssignedTo, Priority: record.Priority, SLADueAt: record.SLADueAt,
+		Email: record.Email, Phone: record.Phone,
 		Status:      record.Status,
-		EmailSentAt: record.EmailSentAt, CreatedAt: record.CreatedAt,
+		EmailSentAt: record.EmailSentAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
+	if ticket.Priority == "" {
+		ticket.Priority = "medium"
+	}
+	if ticket.SLADueAt.IsZero() && !ticket.CreatedAt.IsZero() {
+		ticket.SLADueAt = ticket.CreatedAt.Add(24 * time.Hour)
+	}
+	return ticket
 }
 
 type TicketRepository struct {
@@ -126,8 +138,15 @@ func (r *TicketRepository) GetByKey(ctx context.Context, key string) (domain.Tic
 
 func (r *TicketRepository) CompletePending(ctx context.Context, id uint) (bool, error) {
 	result := r.db.WithContext(ctx).Model(&ticketRecord{}).
-		Where("id = ? AND status = ?", id, domain.StatusPending).
+		Where("id = ? AND status IN ?", id, []string{domain.StatusPending, domain.StatusInProgress}).
 		Update("status", domain.StatusDone)
+	return result.RowsAffected > 0, result.Error
+}
+
+func (r *TicketRepository) SetStatus(ctx context.Context, id uint, status string) (bool, error) {
+	result := r.db.WithContext(ctx).Model(&ticketRecord{}).
+		Where("id = ?", id).
+		Update("status", status)
 	return result.RowsAffected > 0, result.Error
 }
 
@@ -135,6 +154,13 @@ func (r *TicketRepository) SetAssignee(ctx context.Context, id uint, assignee st
 	result := r.db.WithContext(ctx).Model(&ticketRecord{}).
 		Where("id = ?", id).
 		Update("assigned_to", assignee)
+	return result.RowsAffected > 0, result.Error
+}
+
+func (r *TicketRepository) SetPriority(ctx context.Context, id uint, priority string, slaDueAt time.Time) (bool, error) {
+	result := r.db.WithContext(ctx).Model(&ticketRecord{}).
+		Where("id = ?", id).
+		Updates(map[string]any{"priority": priority, "sla_due_at": slaDueAt, "updated_at": time.Now().UTC()})
 	return result.RowsAffected > 0, result.Error
 }
 

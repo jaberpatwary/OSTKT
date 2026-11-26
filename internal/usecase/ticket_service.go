@@ -18,13 +18,14 @@ const (
 )
 
 var (
-	ErrInvalidStatus   = errors.New("status must be done or pending")
+	ErrInvalidStatus   = errors.New("status must be pending, in_progress, or done")
 	ErrEmployeeMissing = errors.New("employee name is required")
 	ErrEmployeeUnknown = errors.New("employee not found")
 	ErrInvalidFilter   = errors.New("invalid ticket status filter")
 	ErrProblemRequired = errors.New("problem description is required")
 	ErrProblemTooLong  = errors.New("problem description must be 2000 characters or fewer")
 	ErrAssigneeTooLong = errors.New("assignee name must be 100 characters or fewer")
+	ErrInvalidPriority = errors.New("priority must be low, medium, high, or urgent")
 )
 
 type EmployeeDirectory interface {
@@ -50,6 +51,7 @@ type CreateTicketInput struct {
 	Status     string
 	Problem    string
 	AssignedTo string
+	Priority   string
 }
 
 type CompleteTicketResult struct {
@@ -83,7 +85,7 @@ func (s *TicketService) ListEmployees() []domain.Employee {
 
 func (s *TicketService) Create(ctx context.Context, input CreateTicketInput) (domain.Ticket, bool, error) {
 	status := strings.ToLower(strings.TrimSpace(input.Status))
-	if status != domain.StatusDone && status != domain.StatusPending {
+	if status != domain.StatusDone && status != domain.StatusPending && status != domain.StatusInProgress {
 		return domain.Ticket{}, false, ErrInvalidStatus
 	}
 	if strings.TrimSpace(input.Name) == "" && strings.TrimSpace(input.EmployeeID) == "" {
@@ -95,6 +97,14 @@ func (s *TicketService) Create(ctx context.Context, input CreateTicketInput) (do
 	}
 	if len([]rune(problem)) > 2000 {
 		return domain.Ticket{}, false, ErrProblemTooLong
+	}
+	priority := strings.ToLower(strings.TrimSpace(input.Priority))
+	if priority == "" {
+		priority = inferTicketPriority(problem)
+	}
+	slaHours, ok := ticketSLAHours(priority)
+	if !ok {
+		return domain.Ticket{}, false, ErrInvalidPriority
 	}
 	assignee := strings.TrimSpace(input.AssignedTo)
 	if len([]rune(assignee)) > 100 {
@@ -120,6 +130,8 @@ func (s *TicketService) Create(ctx context.Context, input CreateTicketInput) (do
 		Department:   employee.Department,
 		Problem:      problem,
 		AssignedTo:   assignee,
+		Priority:     priority,
+		SLADueAt:     time.Now().UTC().Add(time.Duration(slaHours) * time.Hour),
 		Email:        employee.Email,
 		Phone:        employee.Phone,
 		Status:       status,
@@ -129,6 +141,44 @@ func (s *TicketService) Create(ctx context.Context, input CreateTicketInput) (do
 	}
 	queued := status == domain.StatusDone && s.queueEmail(ticket)
 	return ticket, queued, nil
+}
+
+func ticketSLAHours(priority string) (int, bool) {
+	switch strings.ToLower(strings.TrimSpace(priority)) {
+	case "urgent":
+		return 4, true
+	case "high":
+		return 8, true
+	case "medium":
+		return 24, true
+	case "low":
+		return 72, true
+	default:
+		return 0, false
+	}
+}
+
+func inferTicketPriority(problem string) string {
+	text := strings.ToLower(problem)
+	for _, marker := range []string{
+		"security breach", "data breach", "ransomware", "production down", "server down",
+		"entire office", "all users", "puro office", "office er sob", "sobai kaj",
+		"সার্ভার ডাউন", "পুরো অফিস", "সবাইয়ের কাজ", "ডেটা চুরি", "র‍্যানসমওয়্যার", "নিরাপত্তা সমস্যা",
+	} {
+		if strings.Contains(text, marker) {
+			return "urgent"
+		}
+	}
+	for _, marker := range []string{
+		"internet nai", "internet nei", "network down", "system down", "can't work",
+		"cannot work", "unable to work", "kaj korte parchi na", "kaj bondho", "pc cholche na",
+		"ইন্টারনেট নেই", "নেট নেই", "কম্পিউটার চলছে না", "ল্যাপটপ চলছে না", "কাজ বন্ধ", "কাজ করতে পারছি না",
+	} {
+		if strings.Contains(text, marker) {
+			return "high"
+		}
+	}
+	return "medium"
 }
 
 func (s *TicketService) Complete(ctx context.Context, key string) (CompleteTicketResult, error) {
@@ -152,7 +202,38 @@ func (s *TicketService) Complete(ctx context.Context, key string) (CompleteTicke
 		}
 		return CompleteTicketResult{Ticket: current, AlreadyDone: true}, nil
 	}
-	return CompleteTicketResult{Ticket: ticket, EmailQueued: s.queueEmail(ticket)}, nil
+	queued := false
+	if ticket.EmailSentAt == nil {
+		queued = s.queueEmail(ticket)
+	}
+	return CompleteTicketResult{Ticket: ticket, EmailQueued: queued}, nil
+}
+
+func (s *TicketService) SetStatus(ctx context.Context, key, status string) (domain.Ticket, bool, error) {
+	status = strings.ToLower(strings.TrimSpace(status))
+	if status != domain.StatusPending && status != domain.StatusInProgress && status != domain.StatusDone {
+		return domain.Ticket{}, false, ErrInvalidStatus
+	}
+	if status == domain.StatusDone {
+		result, err := s.Complete(ctx, key)
+		return result.Ticket, result.EmailQueued, err
+	}
+	ticket, err := s.repository.GetByKey(ctx, key)
+	if err != nil {
+		return domain.Ticket{}, false, err
+	}
+	if ticket.Status == status {
+		return ticket, false, nil
+	}
+	updated, err := s.repository.SetStatus(ctx, ticket.ID, status)
+	if err != nil {
+		return domain.Ticket{}, false, err
+	}
+	if !updated {
+		return domain.Ticket{}, false, domain.ErrNotFound
+	}
+	ticket.Status = status
+	return ticket, false, nil
 }
 
 func (s *TicketService) Get(ctx context.Context, key string) (domain.Ticket, error) {
@@ -179,9 +260,36 @@ func (s *TicketService) Assign(ctx context.Context, key, assignee string) (domai
 	return ticket, nil
 }
 
+func (s *TicketService) SetPriority(ctx context.Context, key, priority string) (domain.Ticket, error) {
+	priority = strings.ToLower(strings.TrimSpace(priority))
+	hours, ok := ticketSLAHours(priority)
+	if !ok {
+		return domain.Ticket{}, ErrInvalidPriority
+	}
+	ticket, err := s.repository.GetByKey(ctx, key)
+	if err != nil {
+		return domain.Ticket{}, err
+	}
+	startedAt := ticket.CreatedAt
+	if startedAt.IsZero() {
+		startedAt = time.Now().UTC()
+	}
+	dueAt := startedAt.UTC().Add(time.Duration(hours) * time.Hour)
+	updated, err := s.repository.SetPriority(ctx, ticket.ID, priority, dueAt)
+	if err != nil {
+		return domain.Ticket{}, err
+	}
+	if !updated {
+		return domain.Ticket{}, domain.ErrNotFound
+	}
+	ticket.Priority = priority
+	ticket.SLADueAt = dueAt
+	return ticket, nil
+}
+
 func (s *TicketService) List(ctx context.Context, status string, from, until time.Time, limit int) ([]domain.Ticket, int64, error) {
 	status = strings.ToLower(strings.TrimSpace(status))
-	if status != "" && status != domain.StatusDone && status != domain.StatusPending {
+	if status != "" && status != domain.StatusDone && status != domain.StatusPending && status != domain.StatusInProgress {
 		return nil, 0, ErrInvalidFilter
 	}
 	if limit <= 0 || limit > MaxTicketLimit {

@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-  <link rel="stylesheet" href="/theme.css?v=20261126-full-redesign7" />
-  <link rel="stylesheet" href="/premium.css?v=20261126-full-redesign7" />
+  <link rel="stylesheet" href="/theme.css?v=20261126-full-redesign9" />
+  <link rel="stylesheet" href="/premium.css?v=20261126-full-redesign9" />
   <style>
     body { font-family: "Manrope", "Hind Siliguri", system-ui, sans-serif; }
     html.dark #taskAdminSurface { background:#151e35 !important; border-color:#334268 !important; }
@@ -21,7 +21,7 @@
     html.dark .task-admin-card { background:#151e35 !important; border-color:#334268 !important; }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto !important; transition-duration:.01ms !important; } }
   </style>
-  <link rel="stylesheet" href="/experience.css?v=20261126-full-redesign7" />
+  <link rel="stylesheet" href="/experience.css?v=20261126-signal-desk2" />
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-800">
   <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -66,6 +66,29 @@
     const $ = (id) => document.getElementById(id);
     const number = (value) => new Intl.NumberFormat('en').format(value);
     const taskOwners = ['Rupok Kumar Roy', 'Towhedul Islam', 'Md. Imam Hossan Chowdhury', 'Muhammad Fokhrul Hasan', 'Md. Tanvir Ahamed Sarkar', 'Md. Fahad Hossen', 'Mabubul Alam Patwary'];
+    const taskAssignees = [...taskOwners, 'IT Team'];
+    function taskDisplayFields(task) {
+      let createdBy = String(task.created_by || '').trim() || 'Md. Tanvir Ahamed Sarkar';
+      let description = String(task.description || '').trim();
+      const knownCreator = [...taskOwners].sort((a, b) => b.length - a.length).find((name) => createdBy.toLocaleLowerCase().startsWith(name.toLocaleLowerCase()) && !/[\p{L}\p{N}]/u.test(createdBy.slice(name.length, name.length + 1)));
+      if (knownCreator && createdBy.length > knownCreator.length) {
+        let extra = createdBy.slice(knownCreator.length).trim().replace(/^['".,:;\s-]+/, '');
+        extra = extra.replace(/^(?:er|r|'s|’s|\u098f\u09b0)\s+/i, '').replace(/\b(?:assign(?:ed|ee|ing)?|assing)\b.*$/i, '').trim();
+        extra = extra.replace(/\b(?:assign|assing)(?:ed|ee|ing)?(?=[A-Z]).*$/, '').trim();
+        if (extra) description = [extra, description].filter(Boolean).join(' ');
+        createdBy = knownCreator;
+      } else {
+        const inline = createdBy.match(/^(.+?)(?:-er|\s+er|\s+r|'s|’s|[- ]\u098f\u09b0)\s*(.+)$/i);
+        if (inline) {
+          let extra = inline[2].trim().replace(/\b(?:assign(?:ed|ee|ing)?|assing)\b.*$/i, '').trim();
+          if (inline[1].trim() && extra) {
+            createdBy = inline[1].trim();
+            description = [extra, description].filter(Boolean).join(' ');
+          }
+        }
+      }
+      return { createdBy, description };
+    }
     let tasks = [];
 
     async function getJSON(path, options) {
@@ -91,16 +114,29 @@
       });
       $('taskSummary').textContent = `${number(visible.length)} shown · ${number(tasks.length)} total tasks`;
       $('taskRows').replaceChildren(...visible.map((task) => {
+        const display = taskDisplayFields(task);
         const row = document.createElement('tr');
-        const details = document.createElement('td'); details.className = 'max-w-2xl whitespace-pre-wrap break-words px-4 py-3 text-slate-700'; details.textContent = task.description || 'No details';
-        const givenBy = document.createElement('td'); givenBy.className = 'px-4 py-3 text-slate-600'; givenBy.textContent = task.created_by || '—';
+        const details = document.createElement('td'); details.className = 'max-w-2xl px-4 py-3 align-top';
+        const problemBox = document.createElement('div'); problemBox.className = 'task-problem-box task-admin-problem-box';
+        const problemLabel = document.createElement('span'); problemLabel.className = 'task-problem-label'; problemLabel.textContent = 'PROBLEM / TASK DETAILS';
+        const problemText = document.createElement('p'); problemText.className = 'task-admin-problem-text'; problemText.textContent = display.description || 'No details';
+        problemBox.append(problemLabel, problemText); details.append(problemBox);
+        const givenByCell = document.createElement('td'); givenByCell.className = 'px-4 py-3';
+        const givenBy = document.createElement('select'); givenBy.className = 'max-w-56 rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs'; givenBy.setAttribute('aria-label', 'Given by for task ' + task.id);
+        const currentCreator = display.createdBy;
+        if (!currentCreator) {
+          const missing = new Option('Not recorded', ''); missing.disabled = true; givenBy.append(missing);
+        } else if (!taskOwners.includes(currentCreator)) {
+          givenBy.append(new Option(currentCreator + ' (current)', currentCreator));
+        }
+        taskOwners.forEach((name) => givenBy.append(new Option(name, name)));
+        givenBy.value = currentCreator; givenByCell.append(givenBy);
         const ownerCell = document.createElement('td'); ownerCell.className = 'px-4 py-3';
         const owner = document.createElement('select'); owner.className = 'max-w-56 rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs';
-        owner.append(new Option('Unassigned', ''));
-        const names = [...taskOwners];
+        const names = [...taskAssignees];
         if (task.assigned_to && !names.includes(task.assigned_to)) names.unshift(task.assigned_to);
         names.forEach((name) => owner.append(new Option(name, name)));
-        owner.value = task.assigned_to || ''; ownerCell.append(owner);
+        owner.value = task.assigned_to || 'IT Team'; ownerCell.append(owner);
         const statusCell = document.createElement('td'); statusCell.className = 'px-4 py-3';
         const taskStatus = document.createElement('select'); taskStatus.className = 'rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs';
         [['pending', 'Pending'], ['in_progress', 'In progress'], ['done', 'Done']].forEach(([value, label]) => taskStatus.append(new Option(label, value)));
@@ -110,14 +146,16 @@
         save.addEventListener('click', async () => {
           save.disabled = true; save.textContent = 'Saving…'; $('taskAdminError').classList.add('hidden');
           try {
-            const result = await getJSON('/api/tasks/' + encodeURIComponent(task.id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assigned_to: owner.value, status: taskStatus.value }) });
+            const changes = { description: display.description, assigned_to: owner.value, status: taskStatus.value };
+            if (givenBy.value) changes.created_by = givenBy.value;
+            const result = await getJSON('/api/tasks/' + encodeURIComponent(task.id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes) });
             if (!result.ok) throw new Error(result.data.error || 'Task update failed.');
             await loadTasks();
           } catch (error) {
             save.disabled = false; save.textContent = 'Retry'; $('taskAdminError').textContent = error.message || 'Task update failed.'; $('taskAdminError').classList.remove('hidden');
           }
         });
-        actionCell.append(save); row.append(details, givenBy, ownerCell, statusCell, actionCell); return row;
+        actionCell.append(save); row.append(details, givenByCell, ownerCell, statusCell, actionCell); return row;
       }));
       $('taskEmpty').classList.toggle('hidden', visible.length > 0);
       const hasFilters = Boolean(query || status);

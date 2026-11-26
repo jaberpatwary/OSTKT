@@ -33,11 +33,14 @@ type Ticket struct {
 	Department   string
 	Problem      string
 	AssignedTo   string
+	Priority     string
+	SLADueAt     time.Time
 	Email        string
 	Phone        string
 	Status       string
 	EmailSentAt  *time.Time
 	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 func (t Ticket) Employee() Employee {
@@ -85,7 +88,9 @@ type TicketRepository interface {
 	Create(ctx context.Context, ticket *Ticket) error
 	GetByKey(ctx context.Context, key string) (Ticket, error)
 	CompletePending(ctx context.Context, id uint) (bool, error)
+	SetStatus(ctx context.Context, id uint, status string) (bool, error)
 	SetAssignee(ctx context.Context, id uint, assignee string) (bool, error)
+	SetPriority(ctx context.Context, id uint, priority string, slaDueAt time.Time) (bool, error)
 	SetEmailSentAt(ctx context.Context, id uint, sentAt time.Time) error
 	List(ctx context.Context, filter TicketFilter) ([]Ticket, int64, error)
 }

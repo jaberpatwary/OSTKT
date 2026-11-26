@@ -301,6 +301,12 @@ Business rules and ticket lifecycle live in the use case layer. The PostgreSQL/S
 
 The Admin Panel is available at `/admin`. Ticket creation accepts a required problem description and optional assignee. In the Admin Panel, the description is visible and the assignee can be changed or cleared. Both fields are saved in PostgreSQL.
 
+## Ticket priority and response targets
+
+Tickets are assigned an initial priority from issue keywords in Bangla, Banglish, or English. The rule-based estimate does not limit or rewrite the issue description; unrecognized descriptions default to Medium. Admins can change priority from the ticket list. The response target is recalculated from ticket creation using elapsed hours: Urgent 4 hours, High 8 hours, Medium 24 hours, and Low 72 hours. The Admin Panel shows overdue and due-within-four-hours counts for the selected date range and the target beside each ticket.
+
+Tickets can move between Pending, In progress, and Done. The dashboard's open-ticket queue includes both Pending and In progress work; the separate admin status filter can show each stage or reopen a completed ticket.
+
 ## Run with Docker Compose
 
 Copy `.env.example` to `.env` and set unique values for `APP_PASS` and `POSTGRES_PASSWORD` before starting. Keep the private employee workbook as `employees.xlsx` in the repository root; it is excluded from the Docker build and mounted read-only into the app container. Then run:

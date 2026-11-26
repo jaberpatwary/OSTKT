@@ -10,16 +10,16 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-  <link rel="stylesheet" href="/theme.css?v=20261126-full-redesign7" />
-  <link rel="stylesheet" href="/premium.css?v=20261126-full-redesign7" />
+  <link rel="stylesheet" href="/theme.css?v=20261126-full-redesign9" />
+  <link rel="stylesheet" href="/premium.css?v=20261126-full-redesign9" />
   <style>
     body { font-family: "Manrope", "Hind Siliguri", system-ui, sans-serif; }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
   </style>
-  <link rel="stylesheet" href="/experience.css?v=20261126-full-redesign7" />
+  <link rel="stylesheet" href="/experience.css?v=20261126-signal-desk2" />
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-800">
-  <main class="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+  <main class="mx-auto max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8">
     <header class="flex flex-wrap items-center justify-between gap-4">
       <div>
         <p class="text-sm font-semibold uppercase tracking-wider text-blue-600">Auto Ticket System</p>
@@ -29,7 +29,7 @@
       <nav class="flex flex-wrap gap-2"><button id="themeToggle" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm hover:bg-slate-100" aria-pressed="false">🌙 Dark mode</button><a href="/" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm hover:bg-slate-100">← Ticket Form</a><a href="/dashboard" class="inline-flex items-center rounded-xl border border-cyan-200 bg-white px-4 py-2 font-semibold text-cyan-700 shadow-sm hover:bg-cyan-50">Dashboard</a><a href="/admin/tasks" class="inline-flex items-center rounded-xl border border-white/25 bg-white/10 px-4 py-2 font-semibold text-white hover:bg-white/20">Task admin</a><a href="/?view=tasks" class="inline-flex items-center rounded-xl border border-white/25 bg-white/10 px-4 py-2 font-semibold text-white hover:bg-white/20">Task board</a></nav>
     </header>
 
-    <section aria-label="Ticket summary" class="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <section aria-label="Ticket summary" class="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-6">
       <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <p class="text-sm text-slate-500">মোট টিকিট</p>
         <p id="totalCount" class="mt-1 text-3xl font-bold text-slate-900">—</p>
@@ -42,7 +42,21 @@
         <p class="text-sm text-emerald-800">Done</p>
         <p id="doneCount" class="mt-1 text-3xl font-bold text-emerald-900">—</p>
       </div>
+      <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
+        <p class="text-sm text-blue-800">In progress</p>
+        <p id="inProgressCount" class="mt-1 text-3xl font-bold text-blue-900">—</p>
+      </div>
+      <div class="rounded-2xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
+        <p class="text-sm text-rose-800">SLA overdue</p>
+        <p id="slaOverdueCount" class="mt-1 text-3xl font-bold text-rose-900">—</p>
+      </div>
+      <div class="rounded-2xl border border-orange-200 bg-orange-50 p-4 shadow-sm">
+        <p class="text-sm text-orange-800">Due in 4 hours</p>
+        <p id="slaDueSoonCount" class="mt-1 text-3xl font-bold text-orange-900">—</p>
+      </div>
     </section>
+
+    <p class="mt-2 text-xs text-slate-500">Priority is estimated from the issue description. SLA targets use elapsed hours: Urgent 4h · High 8h · Medium 24h · Low 72h. Changing priority recalculates the target from ticket creation. Queue counts follow the date filter.</p>
 
     <section aria-labelledby="assigneeWorkloadTitle" class="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -67,6 +81,7 @@
           <select id="statusFilter" class="rounded-xl border border-slate-300 bg-white px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
             <option value="">সব status</option>
             <option value="pending">Pending</option>
+            <option value="in_progress">In progress</option>
             <option value="done">Done</option>
           </select>
           <label class="sr-only" for="searchInput">টিকিট খুঁজুন</label>
@@ -77,13 +92,14 @@
 
       <div id="errorBox" role="alert" class="hidden m-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800"></div>
       <div class="overflow-x-auto">
-        <table class="w-full min-w-[1180px] text-left text-sm">
+        <table class="w-full min-w-[1420px] text-left text-sm">
           <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th scope="col" class="px-4 py-3">Ticket</th>
               <th scope="col" class="px-4 py-3">কর্মী</th>
               <th scope="col" class="px-4 py-3">বিভাগ</th>
               <th scope="col" class="px-4 py-3">সমস্যা</th>
+              <th scope="col" class="px-4 py-3">Priority / SLA</th>
               <th scope="col" class="px-4 py-3">Assignee</th>
               <th scope="col" class="px-4 py-3">তৈরির সময়</th>
               <th scope="col" class="px-4 py-3">Status</th>
@@ -182,7 +198,7 @@
       const visible = tickets.filter((ticket) => {
         const employee = ticket.employee || {};
         const matchesStatus = !status || ticket.status === status;
-        const haystack = [ticket.ticket_number, employee.Name, employee.EmployeeID, employee.Department, ticket.problem]
+        const haystack = [ticket.ticket_number, employee.Name, employee.EmployeeID, employee.Department, ticket.problem, ticket.priority]
           .filter(Boolean).join(' ').toLocaleLowerCase();
         return matchesStatus && (!query || haystack.includes(query));
       });
@@ -204,15 +220,41 @@
         const problemCell = cell(ticket.problem, 'max-w-[320px] whitespace-pre-wrap break-words px-4 py-3 text-slate-600');
         const created = new Date(ticket.created_at);
         const date = Number.isNaN(created.getTime()) ? '—' : dateFmt.format(created);
+        const priorityCell = document.createElement('td');
+        priorityCell.className = 'min-w-[190px] px-4 py-3';
+        const prioritySelect = document.createElement('select');
+        prioritySelect.setAttribute('aria-label', (employee.Name || ticket.ticket_number || 'Ticket') + ' priority');
+        prioritySelect.className = 'priority-select priority-' + (ticket.priority || 'medium');
+        [['urgent', 'Urgent'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']].forEach(([value, label]) => {
+          const option = document.createElement('option'); option.value = value; option.textContent = label; prioritySelect.append(option);
+        });
+        prioritySelect.value = ticket.priority || 'medium';
+        prioritySelect.addEventListener('change', () => savePriority(ticket, prioritySelect));
+        const dueAt = new Date(ticket.sla_due_at || (created.getTime() + 24 * 60 * 60 * 1000));
+        const dueLabel = document.createElement('p');
+        dueLabel.className = 'mt-1 text-xs font-medium';
+        if (ticket.status === 'done') {
+          dueLabel.classList.add('text-emerald-700'); dueLabel.textContent = 'Resolved';
+        } else if (!Number.isNaN(dueAt.getTime()) && dueAt.getTime() < Date.now()) {
+          dueLabel.classList.add('text-rose-700'); dueLabel.textContent = 'Overdue · ' + dateFmt.format(dueAt);
+        } else if (!Number.isNaN(dueAt.getTime()) && dueAt.getTime() < Date.now() + 4 * 60 * 60 * 1000) {
+          dueLabel.classList.add('text-orange-700'); dueLabel.textContent = 'Due soon · ' + dateFmt.format(dueAt);
+        } else {
+          dueLabel.classList.add('text-slate-500'); dueLabel.textContent = Number.isNaN(dueAt.getTime()) ? 'SLA not set' : 'Due · ' + dateFmt.format(dueAt);
+        }
+        priorityCell.append(prioritySelect, dueLabel);
         const statusCell = document.createElement('td');
         statusCell.className = 'px-4 py-3';
-        const badge = document.createElement('span');
         const done = ticket.status === 'done';
-        badge.className = done
-          ? 'inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800'
-          : 'inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800';
-        badge.textContent = done ? 'Done' : 'Pending';
-        statusCell.append(badge);
+        const statusSelect = document.createElement('select');
+        statusSelect.setAttribute('aria-label', (employee.Name || ticket.ticket_number || 'Ticket') + ' status');
+        statusSelect.className = 'task-status-select status-' + (ticket.status || 'pending');
+        [['pending', 'Pending'], ['in_progress', 'In progress'], ['done', 'Done']].forEach(([value, label]) => {
+          const option = document.createElement('option'); option.value = value; option.textContent = label; statusSelect.append(option);
+        });
+        statusSelect.value = ticket.status || 'pending';
+        statusSelect.addEventListener('change', () => saveTicketStatus(ticket, statusSelect));
+        statusCell.append(statusSelect);
         const actionCell = document.createElement('td');
         actionCell.className = 'px-4 py-3 text-right';
         if (!done) {
@@ -262,7 +304,7 @@
         } else {
           assigneeCell.append(assignment);
         }
-        row.append(ticketCell, employeeCell, cell(employee.Department), problemCell, assigneeCell, cell(date), statusCell, actionCell);
+        row.append(ticketCell, employeeCell, cell(employee.Department), problemCell, priorityCell, assigneeCell, cell(date), statusCell, actionCell);
         rows.append(row);
       }
       $('emptyState').classList.toggle('hidden', visible.length !== 0);
@@ -276,13 +318,14 @@
       refresh.textContent = 'লোড হচ্ছে…';
       $('errorBox').classList.add('hidden');
       try {
-        const [all, pending, done] = await Promise.all([
+        const [all, pending, inProgress, done] = await Promise.all([
           getJSON('/api/tickets?limit=500' + ticketDayQuery()),
           getJSON('/api/tickets?status=pending&limit=500' + ticketDayQuery()),
+          getJSON('/api/tickets?status=in_progress&limit=500' + ticketDayQuery()),
           getJSON('/api/tickets?status=done&limit=500' + ticketDayQuery()),
         ]);
         if (sequence !== requestSequence) return;
-        const failure = [all, pending, done].find((result) => !result.ok);
+        const failure = [all, pending, inProgress, done].find((result) => !result.ok);
         if (failure) {
           $('errorBox').textContent = failure.status === 401
             ? 'Admin panel দেখতে login করুন।'
@@ -294,9 +337,15 @@
         }
         tickets = Array.isArray(all.data.tickets) ? all.data.tickets : [];
         const pendingTickets = Array.isArray(pending.data.tickets) ? pending.data.tickets : [];
+        const inProgressTickets = Array.isArray(inProgress.data.tickets) ? inProgress.data.tickets : [];
         $('totalCount').textContent = number(all.data.total ?? tickets.length);
         $('pendingCount').textContent = number(pending.data.total ?? 0);
+        $('inProgressCount').textContent = number(inProgress.data.total ?? 0);
         $('doneCount').textContent = number(done.data.total ?? 0);
+        const now = Date.now();
+        const openSLAs = [...pendingTickets, ...inProgressTickets].map((ticket) => new Date(ticket.sla_due_at || (new Date(ticket.created_at).getTime() + 24 * 60 * 60 * 1000)).getTime());
+        $('slaOverdueCount').textContent = number(openSLAs.filter((due) => Number.isFinite(due) && due < now).length);
+        $('slaDueSoonCount').textContent = number(openSLAs.filter((due) => Number.isFinite(due) && due >= now && due < now + 4 * 60 * 60 * 1000).length);
         renderAssigneeWorkload(pendingTickets);
         render();
       } catch (_) {
@@ -341,6 +390,43 @@
       } catch (error) {
         button.disabled = false;
         button.textContent = originalText;
+        $('errorBox').textContent = error.message;
+        $('errorBox').classList.remove('hidden');
+      }
+    }
+
+    async function savePriority(ticket, select) {
+      const selected = select.value;
+      select.disabled = true;
+      try {
+        const result = await getJSON('/api/tickets/' + encodeURIComponent(ticket.id) + '/priority', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ priority: selected })
+        });
+        if (!result.ok) throw new Error(result.data.error || 'Priority update failed.');
+        await loadTickets();
+      } catch (error) {
+        select.disabled = false;
+        $('errorBox').textContent = error.message;
+        $('errorBox').classList.remove('hidden');
+      }
+    }
+
+    async function saveTicketStatus(ticket, select) {
+      const selected = select.value;
+      select.disabled = true;
+      try {
+        const result = await getJSON('/api/tickets/' + encodeURIComponent(ticket.id) + '/status', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: selected })
+        });
+        if (!result.ok) throw new Error(result.data.error || 'Status update failed.');
+        await loadTickets();
+      } catch (error) {
+        select.disabled = false;
+        select.value = ticket.status || 'pending';
         $('errorBox').textContent = error.message;
         $('errorBox').classList.remove('hidden');
       }

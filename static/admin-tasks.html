@@ -19,15 +19,18 @@
     html.dark #taskAdminSurface tbody { color:#e2e8f0 !important; }
     html.dark #taskAdminSurface input, html.dark #taskAdminSurface select { color:#eaf0ff !important; background:#111a2b !important; border-color:#33415d !important; }
     html.dark .task-admin-card { background:#151e35 !important; border-color:#334268 !important; }
+    #taskAdminNav { align-items:center; justify-content:flex-end; gap:8px; }
+    #taskAdminNav > a, #taskAdminNav > button { display:inline-flex; align-items:center; justify-content:center; align-self:center; box-sizing:border-box; flex:0 0 auto; height:44px; min-height:44px; margin:0; padding:0 12px !important; line-height:1.15; white-space:nowrap; vertical-align:middle; }
+    @media (max-width: 760px) { #taskAdminHeader { align-items:flex-start; } #taskAdminNav { width:100%; justify-content:flex-start; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto !important; transition-duration:.01ms !important; } }
   </style>
   <link rel="stylesheet" href="/experience.css?v=20261126-signal-desk2" />
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-800">
   <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-    <header class="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-gradient-to-r from-violet-900 via-indigo-800 to-cyan-800 px-6 py-7 text-white shadow-xl sm:px-8">
+    <header id="taskAdminHeader" class="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-gradient-to-r from-violet-900 via-indigo-800 to-cyan-800 px-6 py-7 text-white shadow-xl sm:px-8">
       <div><p class="text-xs font-extrabold uppercase tracking-[.2em] text-cyan-200">TEAM EXECUTION</p><h1 class="mt-1 text-3xl font-extrabold tracking-tight">Task Admin Panel</h1><p class="mt-1 text-sm text-indigo-100">Manage task owners and progress.</p></div>
-      <nav class="flex flex-wrap gap-2">
+      <nav id="taskAdminNav" class="flex flex-wrap gap-2">
         <button id="themeToggle" type="button" data-theme-toggle class="task-header-button" aria-pressed="false">🌙 Dark mode</button>
         <a href="/?view=tasks" class="task-header-button">← Task board</a>
         <a href="/admin" class="task-header-button">Ticket admin</a><a href="/admin/users" data-roles="admin" class="task-header-button">Users &amp; roles</a><a href="/admin/audit" data-roles="admin,manager" class="task-header-button">Audit</a><a href="/dashboard" class="task-header-button">Ticket dashboard</a><button id="taskAdminRefresh" type="button" class="task-header-button">↻ Refresh</button>

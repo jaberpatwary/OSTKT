@@ -326,6 +326,8 @@ Ticket Admin, Task Admin, and the task board provide a **History** action for ea
 
 The same History panel supports private work-item attachments: PDF, PNG/JPG/GIF/WEBP images, TXT, and CSV files up to 10 MB each. Uploads are checked against their file content, stored outside the public static directory under generated names, and downloaded only through the authenticated API. Docker Compose persists them in the `ticket-attachments` volume across rebuilds. Set `ATTACHMENT_DIR` to a persistent disk path on hosted deployments; back up that directory together with the database.
 
+Ticket Admin and Task Admin can export CSV files using the current filters. Ticket exports follow the selected day, status, and search text; task exports follow status and search text. Files include a UTF-8 BOM for spreadsheet compatibility, protect user-entered text from spreadsheet formula execution, and export up to 10,000 matching records at a time. If more records match, narrow the filters and export again.
+
 ## Ticket priority and response targets
 
 Tickets are assigned an initial priority from issue keywords in Bangla, Banglish, or English. The rule-based estimate does not limit or rewrite the issue description; unrecognized descriptions default to Medium. Admins can change priority from the ticket list. The response target is recalculated from ticket creation using elapsed hours: Urgent 4 hours, High 8 hours, Medium 24 hours, and Low 72 hours. The Admin Panel shows overdue and due-within-four-hours counts for the selected date range and the target beside each ticket.

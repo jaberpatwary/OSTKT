@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	MaxTaskLimit        = 500
+	MaxTaskLimit        = 10000
 	DefaultTaskCreator  = "Md. Tanvir Ahamed Sarkar"
 	DefaultTaskAssignee = "IT Team"
 )

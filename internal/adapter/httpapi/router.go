@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
@@ -244,6 +245,7 @@ func newRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 	api.POST("/assistant/tasks", handler.assistantTaskChat)
 	api.POST("/assistant/transcribe", handler.assistantTranscribe)
 	api.GET("/tickets", handler.listTickets)
+	api.GET("/tickets/export.csv", handler.exportTicketsCSV)
 	api.POST("/tickets", handler.createTicket)
 	api.GET("/tickets/:id", handler.getTicket)
 	api.POST("/tickets/:id/done", handler.markDone)
@@ -251,6 +253,7 @@ func newRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 	api.PUT("/tickets/:id/assignee", handler.assignTicket)
 	api.PATCH("/tickets/:id/priority", handler.setTicketPriority)
 	api.GET("/tasks", handler.listTasks)
+	api.GET("/tasks/export.csv", handler.exportTasksCSV)
 	api.POST("/tasks", handler.createTask)
 	api.PATCH("/tasks/:id", handler.updateTask)
 
@@ -1785,6 +1788,66 @@ func (h *Handler) listTickets(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"tickets": views, "count": len(views), "total": total})
 }
 
+const MaxCSVExportRows = 10000
+
+func (h *Handler) exportTicketsCSV(c *gin.Context) {
+	status := strings.ToLower(strings.TrimSpace(c.Query("status")))
+	var from, until time.Time
+	if c.Query("from") != "" || c.Query("until") != "" {
+		var err error
+		from, err = time.Parse(time.RFC3339, c.Query("from"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "from must be an RFC3339 timestamp"})
+			return
+		}
+		until, err = time.Parse(time.RFC3339, c.Query("until"))
+		if err != nil || !until.After(from) || until.Sub(from) > 24*time.Hour+time.Minute {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "until must be after from and within one day"})
+			return
+		}
+	}
+	tickets, total, err := h.tickets.List(c.Request.Context(), status, from, until, MaxCSVExportRows)
+	if errors.Is(err, usecase.ErrInvalidFilter) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "status must be pending, in_progress, or done"})
+		return
+	}
+	if err != nil {
+		log.Printf("ticket CSV export failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not export tickets"})
+		return
+	}
+	if total > MaxCSVExportRows {
+		c.JSON(http.StatusConflict, gin.H{"error": "More than 10,000 tickets match. Narrow the date or status filter and export again."})
+		return
+	}
+	query := strings.ToLower(strings.TrimSpace(c.Query("q")))
+	if query != "" {
+		filtered := tickets[:0]
+		for _, ticket := range tickets {
+			haystack := strings.ToLower(strings.Join([]string{ticket.TicketNumber, ticket.EmployeeName, ticket.EmployeeID, ticket.Department, ticket.Problem, ticket.Priority}, " "))
+			if strings.Contains(haystack, query) {
+				filtered = append(filtered, ticket)
+			}
+		}
+		tickets = filtered
+	}
+	if len(tickets) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No tickets match the current filters."})
+		return
+	}
+	rows := make([][]string, 0, len(tickets))
+	for _, ticket := range tickets {
+		rows = append(rows, []string{
+			strconv.FormatUint(uint64(ticket.ID), 10), ticket.TicketNumber, ticket.EmployeeName,
+			ticket.EmployeeID, ticket.Department, ticket.Problem, ticket.AssignedTo,
+			ticket.Priority, ticket.SLADueAt.UTC().Format(time.RFC3339), ticket.Status,
+			ticket.CreatedAt.UTC().Format(time.RFC3339),
+		})
+	}
+	filename := "tickets-" + time.Now().UTC().Format("20060102-150405") + ".csv"
+	writeCSVResponse(c, filename, []string{"ID", "Ticket number", "Employee", "Employee ID", "Department", "Problem", "Assigned to", "Priority", "SLA due (UTC)", "Status", "Created at (UTC)"}, rows)
+}
+
 type createTaskRequest struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
@@ -1830,6 +1893,113 @@ func (h *Handler) listTasks(c *gin.Context) {
 		views = append(views, toTaskView(task))
 	}
 	c.JSON(http.StatusOK, gin.H{"tasks": views, "count": len(views), "total": total})
+}
+
+func (h *Handler) exportTasksCSV(c *gin.Context) {
+	if h.tasks == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "task service is unavailable"})
+		return
+	}
+	query := strings.TrimSpace(c.Query("q"))
+	status := strings.ToLower(strings.TrimSpace(c.Query("status")))
+	var tasks []domain.Task
+	var total int64
+	var err error
+	if strings.HasPrefix(strings.ToLower(query), "tsk-") {
+		idValue, parseErr := strconv.ParseUint(strings.TrimPrefix(strings.ToLower(query), "tsk-"), 10, 64)
+		getter, ok := h.tasks.(taskGetter)
+		if parseErr == nil && idValue > 0 && ok {
+			if status != "" && status != domain.StatusPending && status != domain.StatusInProgress && status != domain.StatusDone {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "status must be pending, in_progress, or done"})
+				return
+			}
+			task, getErr := getter.Get(c.Request.Context(), uint(idValue))
+			if getErr != nil && !errors.Is(getErr, domain.ErrNotFound) {
+				log.Printf("task CSV export lookup failed: %v", getErr)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "could not export tasks"})
+				return
+			}
+			assignee := strings.TrimSpace(c.Query("assignee"))
+			if getErr == nil && (status == "" || status == task.Status) && (assignee == "" || assignee == task.AssignedTo) {
+				tasks = []domain.Task{task}
+				total = 1
+			}
+		} else {
+			tasks, total, err = h.tasks.List(c.Request.Context(), domain.TaskFilter{
+				Status: status, Assignee: c.Query("assignee"), Query: query, Limit: MaxCSVExportRows,
+			})
+		}
+	} else {
+		tasks, total, err = h.tasks.List(c.Request.Context(), domain.TaskFilter{
+			Status: status, Assignee: c.Query("assignee"), Query: query, Limit: MaxCSVExportRows,
+		})
+	}
+	if errors.Is(err, usecase.ErrTaskInvalidStatus) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "status must be pending, in_progress, or done"})
+		return
+	}
+	if err != nil {
+		log.Printf("task CSV export failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not export tasks"})
+		return
+	}
+	if total > MaxCSVExportRows {
+		c.JSON(http.StatusConflict, gin.H{"error": "More than 10,000 tasks match. Narrow the status or search filter and export again."})
+		return
+	}
+	if len(tasks) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No tasks match the current filters."})
+		return
+	}
+	rows := make([][]string, 0, len(tasks))
+	for _, task := range tasks {
+		rows = append(rows, []string{
+			strconv.FormatUint(uint64(task.ID), 10), task.Title, task.Description,
+			task.CreatedBy, task.AssignedTo, task.Priority, task.DueDate,
+			task.Status, task.CreatedAt.UTC().Format(time.RFC3339), task.UpdatedAt.UTC().Format(time.RFC3339),
+		})
+	}
+	filename := "tasks-" + time.Now().UTC().Format("20060102-150405") + ".csv"
+	writeCSVResponse(c, filename, []string{"ID", "Title", "Details", "Given by", "Assigned to", "Priority", "Due date", "Status", "Created at (UTC)", "Updated at (UTC)"}, rows)
+}
+
+func writeCSVResponse(c *gin.Context, filename string, headers []string, rows [][]string) {
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Cache-Control", "private, no-store")
+	c.Status(http.StatusOK)
+	if _, err := c.Writer.Write([]byte{0xef, 0xbb, 0xbf}); err != nil {
+		log.Printf("CSV response interrupted before rows were written")
+		return
+	}
+	writer := csv.NewWriter(c.Writer)
+	if err := writer.Write(csvSafeRow(headers)); err != nil {
+		log.Printf("CSV header write failed: %v", err)
+		return
+	}
+	for _, row := range rows {
+		if err := writer.Write(csvSafeRow(row)); err != nil {
+			log.Printf("CSV row write failed: %v", err)
+			return
+		}
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		log.Printf("CSV response failed: %v", err)
+	}
+}
+
+func csvSafeRow(row []string) []string {
+	safe := make([]string, len(row))
+	for i, value := range row {
+		trimmed := strings.TrimLeftFunc(value, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) })
+		if trimmed != "" && strings.ContainsRune("=+-@", rune(trimmed[0])) {
+			value = "'" + value
+		}
+		safe[i] = value
+	}
+	return safe
 }
 
 func (h *Handler) createTask(c *gin.Context) {

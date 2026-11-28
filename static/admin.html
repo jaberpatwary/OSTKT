@@ -87,6 +87,7 @@
           <label class="sr-only" for="searchInput">টিকিট খুঁজুন</label>
           <input id="searchInput" type="search" placeholder="নাম / ID / ticket no." class="min-w-0 rounded-xl border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 sm:w-64" />
           <button id="refreshBtn" type="button" class="rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60">↻ Refresh</button>
+          <button id="ticketExportCSV" type="button" title="Export tickets matching the current date, status, and search filters" class="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 font-semibold text-emerald-800 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60">Export CSV</button>
         </div>
       </div>
 
@@ -126,6 +127,7 @@
     const refresh = $('refreshBtn');
     const dayFilter = $('ticketDayFilter');
     const dateScopeToggle = $('ticketDateScopeToggle');
+    const exportButton = $('ticketExportCSV');
     const number = (value) => new Intl.NumberFormat('bn-BD').format(value);
     function ticketDayQuery() {
       const day = dayFilter.value;
@@ -366,6 +368,43 @@
       }
     }
 
+    async function exportTicketsCSV() {
+      const params = new URLSearchParams();
+      if (filter.value) params.set('status', filter.value);
+      if (search.value.trim()) params.set('q', search.value.trim());
+      if (dayFilter.value) {
+        const start = new Date(`${dayFilter.value}T00:00:00+06:00`);
+        const until = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+        params.set('from', start.toISOString());
+        params.set('until', until.toISOString());
+      }
+      exportButton.disabled = true;
+      exportButton.textContent = 'Preparing…';
+      $('errorBox').classList.add('hidden');
+      try {
+        const response = await fetch('/api/tickets/export.csv?' + params.toString(), { cache: 'no-store' });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || 'Ticket export failed.');
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const filename = disposition.match(/filename="([^"]+)"/);
+        link.href = url;
+        link.download = filename ? filename[1] : 'tickets-export.csv';
+        document.body.append(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (error) {
+        $('errorBox').textContent = error.message || 'Ticket export failed.';
+        $('errorBox').classList.remove('hidden');
+      } finally {
+        exportButton.disabled = false;
+        exportButton.textContent = 'Export CSV';
+      }
+    }
+
     async function markDone(ticket, button) {
       button.disabled = true;
       button.textContent = 'আপডেট হচ্ছে…';
@@ -458,6 +497,7 @@
       loadTickets();
     });
     refresh.addEventListener('click', loadTickets);
+    exportButton.addEventListener('click', exportTicketsCSV);
     dayFilter.value = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
     dateScopeToggle.textContent = 'All dates';
     dateScopeToggle.setAttribute('aria-label', 'Show tickets from all dates');

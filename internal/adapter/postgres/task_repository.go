@@ -84,7 +84,7 @@ func (r *TaskRepository) List(ctx context.Context, filter domain.TaskFilter) ([]
 		return nil, 0, err
 	}
 	limit := filter.Limit
-	if limit <= 0 || limit > 500 {
+	if limit <= 0 || limit > 10000 {
 		limit = 100
 	}
 	records := make([]taskRecord, 0)

@@ -14,7 +14,7 @@ import (
 const (
 	MaxSearchResults = 5
 	MaxConflictList  = 10
-	MaxTicketLimit   = 500
+	MaxTicketLimit   = 10000
 )
 
 var (

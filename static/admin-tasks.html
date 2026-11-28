@@ -48,6 +48,7 @@
           <label class="sr-only" for="taskSearch">Search tasks</label><input id="taskSearch" type="search" placeholder="Search details, Given by, owner…" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
           <label class="sr-only" for="taskStatusFilter">Filter tasks by status</label><select id="taskStatusFilter" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"><option value="">All statuses</option><option value="pending">Pending</option><option value="in_progress">In progress</option><option value="done">Done</option></select>
           <button id="taskAdminClearFilters" type="button" class="hidden rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-50">Clear filters</button>
+          <button id="taskExportCSV" type="button" title="Export tasks matching the current status and search filters" class="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60">Export CSV</button>
         </div>
       </div>
       <div id="taskAdminError" role="alert" class="hidden m-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800"></div>
@@ -90,6 +91,7 @@
       return { createdBy, description };
     }
     let tasks = [];
+    let taskTotal = 0;
 
     async function getJSON(path, options) {
       const response = await fetch(path, { cache: 'no-store', ...(options || {}) });
@@ -112,7 +114,7 @@
         const haystack = [task.description, task.created_by, task.assigned_to, 'tsk-' + task.id].filter(Boolean).join(' ').toLocaleLowerCase();
         return (!query || haystack.includes(query)) && (!status || task.status === status);
       });
-      $('taskSummary').textContent = `${number(visible.length)} shown · ${number(tasks.length)} total tasks`;
+      $('taskSummary').textContent = `${number(visible.length)} shown · ${number(taskTotal)} total tasks${taskTotal > tasks.length ? ` · list preview: ${number(tasks.length)}` : ''}`;
       $('taskRows').replaceChildren(...visible.map((task) => {
         const display = taskDisplayFields(task);
         const row = document.createElement('tr');
@@ -174,6 +176,7 @@
         const result = await getJSON('/api/tasks?limit=500');
         if (!result.ok) throw new Error(result.data.error || 'Tasks could not be loaded.');
         tasks = Array.isArray(result.data.tasks) ? result.data.tasks : [];
+        taskTotal = Number(result.data.total) || tasks.length;
         updateCounts(); renderTasks();
       } catch (error) {
         $('taskAdminError').textContent = error.message || 'Tasks could not be loaded.'; $('taskAdminError').classList.remove('hidden');
@@ -189,7 +192,37 @@
       $('taskSearch').focus();
     });
     $('taskAdminRefresh').addEventListener('click', loadTasks);
+    $('taskExportCSV').addEventListener('click', exportTasksCSV);
     loadTasks();
+
+    async function exportTasksCSV() {
+      const params = new URLSearchParams();
+      if ($('taskStatusFilter').value) params.set('status', $('taskStatusFilter').value);
+      if ($('taskSearch').value.trim()) params.set('q', $('taskSearch').value.trim());
+      const button = $('taskExportCSV');
+      button.disabled = true; button.textContent = 'Preparing…';
+      $('taskAdminError').classList.add('hidden');
+      try {
+        const response = await fetch('/api/tasks/export.csv?' + params.toString(), { cache: 'no-store' });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || 'Task export failed.');
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const filename = disposition.match(/filename="([^"]+)"/);
+        link.href = url; link.download = filename ? filename[1] : 'tasks-export.csv';
+        document.body.append(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (error) {
+        $('taskAdminError').textContent = error.message || 'Task export failed.';
+        $('taskAdminError').classList.remove('hidden');
+      } finally {
+        button.disabled = false; button.textContent = 'Export CSV';
+      }
+    }
   })();
   </script>
   <script src="/theme.js?v=security-rbac1"></script>

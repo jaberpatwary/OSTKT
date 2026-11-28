@@ -274,6 +274,8 @@ func newRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 	site.StaticFile("/theme.js", "./static/theme.js")
 	site.StaticFile("/notifications.js", "./static/notifications.js")
 	site.StaticFile("/work-activity.js", "./static/work-activity.js")
+	site.StaticFile("/admin-enhancements.css", "./static/admin-enhancements.css")
+	site.StaticFile("/admin-enhancements.js", "./static/admin-enhancements.js")
 
 	api := site.Group("/api")
 	if security != nil {

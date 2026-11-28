@@ -17,6 +17,7 @@
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
   </style>
   <link rel="stylesheet" href="/experience.css?v=20261128-font-nav" />
+  <link rel="stylesheet" href="/admin-enhancements.css?v=20261129-workspace-v1" />
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-800">
   <main class="mx-auto max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8">
@@ -373,6 +374,7 @@
       $('ticketPageSummary').textContent = `Page ${number(ticketPage + 1)} of ${number(Math.max(1, Math.ceil(ticketTotal / pageSize)))}`;
       $('ticketPrevPage').disabled = ticketPage === 0;
       $('ticketNextPage').disabled = (ticketPage + 1) * pageSize >= ticketTotal;
+      window.dispatchEvent(new CustomEvent('workspace:data', { detail: { type: 'ticket', items: visible } }));
     }
 
     async function loadTickets() {
@@ -582,7 +584,10 @@
     exportButton.addEventListener('click', exportTicketsCSV);
     $('ticketPrevPage').addEventListener('click', () => { if (ticketPage > 0) { ticketPage--; loadTickets(); } });
     $('ticketNextPage').addEventListener('click', () => { if ((ticketPage + 1) * pageSize < ticketTotal) { ticketPage++; loadTickets(); } });
-    dayFilter.value = todayInDhaka();
+    const initialParams = new URLSearchParams(location.search);
+    const requestedDay = initialParams.get('day');
+    dayFilter.value = requestedDay && /^\d{4}-\d{2}-\d{2}$/.test(requestedDay) && requestedDay <= todayInDhaka() ? requestedDay : todayInDhaka();
+    if (initialParams.get('q')) search.value = initialParams.get('q');
     syncTicketDateControls();
     loadTickets();
   })();
@@ -590,5 +595,6 @@
   <script src="/theme.js?v=security-rbac1"></script>
   <script src="/notifications.js?v=step2-alerts"></script>
   <script src="/work-activity.js?v=activity-step3"></script>
+  <script src="/admin-enhancements.js?v=20261129-workspace-v1"></script>
 </body>
 </html>

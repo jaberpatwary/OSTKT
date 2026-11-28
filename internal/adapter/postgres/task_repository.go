@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -82,8 +83,14 @@ func (r *TaskRepository) List(ctx context.Context, filter domain.TaskFilter) ([]
 		query = query.Where("assigned_to = ?", filter.Assignee)
 	}
 	if filter.Query != "" {
-		like := "%" + strings.ToLower(filter.Query) + "%"
-		query = query.Where("(LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(created_by) LIKE ? OR LOWER(assigned_to) LIKE ?)", like, like, like, like)
+		searchText := strings.TrimSpace(filter.Query)
+		like := "%" + strings.ToLower(searchText) + "%"
+		idText := strings.TrimPrefix(strings.ToUpper(searchText), "TSK-")
+		if id, err := strconv.ParseUint(idText, 10, 64); err == nil {
+			query = query.Where("(id = ? OR LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(created_by) LIKE ? OR LOWER(assigned_to) LIKE ?)", id, like, like, like, like)
+		} else {
+			query = query.Where("(LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(created_by) LIKE ? OR LOWER(assigned_to) LIKE ?)", like, like, like, like)
+		}
 	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {

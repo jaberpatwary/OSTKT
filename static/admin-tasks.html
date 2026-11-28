@@ -25,6 +25,7 @@
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto !important; transition-duration:.01ms !important; } }
   </style>
   <link rel="stylesheet" href="/experience.css?v=20261128-font-nav" />
+  <link rel="stylesheet" href="/admin-enhancements.css?v=20261129-workspace-v1" />
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-800">
   <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -172,7 +173,15 @@
         const problemBox = document.createElement('div'); problemBox.className = 'task-problem-box task-admin-problem-box';
         const problemLabel = document.createElement('span'); problemLabel.className = 'task-problem-label'; problemLabel.textContent = 'PROBLEM / TASK DETAILS';
         const problemText = document.createElement('p'); problemText.className = 'task-admin-problem-text'; problemText.textContent = display.description || 'No details';
-        problemBox.append(problemLabel, problemText); details.append(problemBox);
+        const metadata = document.createElement('div'); metadata.className = 'mt-2 flex flex-wrap gap-2';
+        const priorityTag = document.createElement('span'); priorityTag.className = 'workspace-meta-chip'; priorityTag.dataset.workspaceMeta = 'priority'; priorityTag.textContent = 'Priority · ' + (task.priority || 'medium');
+        const dueTag = document.createElement('span'); dueTag.className = 'workspace-meta-chip'; dueTag.dataset.workspaceMeta = 'due';
+        const dueDate = task.due_date ? new Date(task.due_date + 'T00:00:00') : null;
+        const isOverdue = dueDate && !Number.isNaN(dueDate.getTime()) && dueDate < new Date(new Date().toDateString()) && task.status !== 'done';
+        dueTag.classList.toggle('workspace-meta-overdue', Boolean(isOverdue));
+        dueTag.textContent = 'Due · ' + (task.due_date || 'No due date') + (isOverdue ? ' · Overdue' : '');
+        metadata.append(priorityTag, dueTag);
+        problemBox.append(problemLabel, problemText, metadata); details.append(problemBox);
         const givenByCell = document.createElement('td'); givenByCell.className = 'px-4 py-3 text-slate-700';
         const givenBy = document.createElement('span'); givenBy.textContent = display.createdBy;
         givenByCell.append(givenBy);
@@ -210,6 +219,7 @@
       if (!visible.length) $('taskEmpty').textContent = hasFilters
         ? 'No tasks match these filters. Clear filters or try another search.'
         : 'No tasks have been created yet. Create one from the task board.';
+      window.dispatchEvent(new CustomEvent('workspace:data', { detail: { type: 'task', items: visible } }));
     }
 
     async function loadTasks() {
@@ -269,7 +279,10 @@
     $('taskPrevPage').addEventListener('click', () => { if (taskPage > 0) { taskPage--; loadTasks(); } });
     $('taskNextPage').addEventListener('click', () => { if ((taskPage + 1) * taskPageSize < taskTotal) { taskPage++; loadTasks(); } });
     $('taskExportCSV').addEventListener('click', exportTasksCSV);
-    taskDayFilter.value = todayInDhaka();
+    const initialParams = new URLSearchParams(location.search);
+    const requestedDay = initialParams.get('day');
+    taskDayFilter.value = requestedDay && /^\d{4}-\d{2}-\d{2}$/.test(requestedDay) && requestedDay <= todayInDhaka() ? requestedDay : todayInDhaka();
+    if (initialParams.get('q')) $('taskSearch').value = initialParams.get('q');
     syncTaskDateControls();
     loadTasks();
 
@@ -307,5 +320,6 @@
   <script src="/theme.js?v=security-rbac1"></script>
   <script src="/notifications.js?v=step2-alerts"></script>
   <script src="/work-activity.js?v=activity-step3"></script>
+  <script src="/admin-enhancements.js?v=20261129-workspace-v1"></script>
 </body>
 </html>

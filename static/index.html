@@ -2290,9 +2290,11 @@
       owner.append(ownerLabel, taskAssigneeSelect(task));
       const actions = document.createElement('div'); actions.className = 'task-card-actions';
       actions.append(taskStatusSelect(task));
+      const history = document.createElement('button'); history.type = 'button'; history.className = 'task-edit-button'; history.textContent = 'History';
+      history.dataset.workActivity = 'task'; history.dataset.workId = String(task.id); history.dataset.workTitle = 'TSK-' + String(task.id).padStart(6, '0');
       const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'task-edit-button'; edit.textContent = 'Edit';
       edit.addEventListener('click', () => beginTaskEdit(task));
-      actions.append(edit); footer.append(owner, actions); card.append(top, problemBox, requester, footer);
+      actions.append(history, edit); footer.append(owner, actions); card.append(top, problemBox, requester, footer);
       return card;
     }
     function renderTaskBoard() {
@@ -2611,6 +2613,8 @@
     if (window.matchMedia('(pointer: fine)').matches) el.nameInput.focus();
   })();
   </script>
-  <script src="/theme.js"></script>
+  <script src="/theme.js?v=security-rbac1"></script>
+  <script src="/notifications.js?v=step2-alerts"></script>
+  <script src="/work-activity.js?v=activity-step3"></script>
 </body>
 </html>

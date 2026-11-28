@@ -2,8 +2,12 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"regexp"
 	"sort"
@@ -38,6 +42,32 @@ type TaskUseCase interface {
 	Create(ctx context.Context, input usecase.CreateTaskInput) (domain.Task, error)
 	List(ctx context.Context, filter domain.TaskFilter) ([]domain.Task, int64, error)
 	Update(ctx context.Context, id uint, input usecase.UpdateTaskInput) (domain.Task, error)
+}
+
+type SecurityUseCase interface {
+	Authenticate(ctx context.Context, username, password string) (domain.User, error)
+	ListUsers(ctx context.Context) ([]domain.User, error)
+	CreateUser(ctx context.Context, input domain.UserInput) (domain.User, error)
+	UpdateUser(ctx context.Context, id uint, input domain.UserUpdate) (domain.User, error)
+	RecordAudit(ctx context.Context, event domain.AuditEvent) error
+	ListAudit(ctx context.Context, limit int) ([]domain.AuditEvent, error)
+}
+
+type NotificationUseCase interface {
+	List(ctx context.Context, userID uint, unreadOnly bool, limit int) ([]domain.Notification, int64, error)
+	MarkRead(ctx context.Context, userID, notificationID uint) (bool, error)
+	MarkAllRead(ctx context.Context, userID uint) error
+}
+
+type ActivityUseCase interface {
+	Record(ctx context.Context, actor domain.User, workType string, workID uint, kind, message string) (domain.WorkActivity, error)
+	List(ctx context.Context, workType string, workID uint, limit int) ([]domain.WorkActivity, error)
+}
+
+type AttachmentUseCase interface {
+	Upload(ctx context.Context, actor domain.User, workType string, workID uint, filename string, source io.Reader) (domain.Attachment, error)
+	List(ctx context.Context, workType string, workID uint) ([]domain.Attachment, error)
+	Download(ctx context.Context, workType string, workID, attachmentID uint) (domain.Attachment, io.ReadCloser, error)
 }
 
 type ticketView struct {
@@ -92,6 +122,10 @@ func toView(ticket domain.Ticket, emailQueued bool) ticketView {
 type Handler struct {
 	tickets        TicketUseCase
 	tasks          TaskUseCase
+	security       SecurityUseCase
+	notifications  NotificationUseCase
+	activities     ActivityUseCase
+	attachments    AttachmentUseCase
 	assistant      *groqapi.Client
 	assistantMu    sync.Mutex
 	assistantRates map[string]assistantRateEntry
@@ -111,6 +145,30 @@ func normalizeAssistantBanglish(text string) string {
 }
 
 func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, cfg config.Config, taskServices ...TaskUseCase) *gin.Engine {
+	var tasks TaskUseCase
+	if len(taskServices) > 0 {
+		tasks = taskServices[0]
+	}
+	return newRouter(tickets, healthCheck, cfg, tasks, nil, nil, nil, nil)
+}
+
+func NewRouterWithSecurity(tickets TicketUseCase, healthCheck func(context.Context) error, cfg config.Config, tasks TaskUseCase, security SecurityUseCase) *gin.Engine {
+	return newRouter(tickets, healthCheck, cfg, tasks, security, nil, nil, nil)
+}
+
+func NewRouterWithOperations(tickets TicketUseCase, healthCheck func(context.Context) error, cfg config.Config, tasks TaskUseCase, security SecurityUseCase, notifications NotificationUseCase) *gin.Engine {
+	return newRouter(tickets, healthCheck, cfg, tasks, security, notifications, nil, nil)
+}
+
+func NewRouterWithActivity(tickets TicketUseCase, healthCheck func(context.Context) error, cfg config.Config, tasks TaskUseCase, security SecurityUseCase, notifications NotificationUseCase, activities ActivityUseCase) *gin.Engine {
+	return newRouter(tickets, healthCheck, cfg, tasks, security, notifications, activities, nil)
+}
+
+func NewRouterWithAttachments(tickets TicketUseCase, healthCheck func(context.Context) error, cfg config.Config, tasks TaskUseCase, security SecurityUseCase, notifications NotificationUseCase, activities ActivityUseCase, attachments AttachmentUseCase) *gin.Engine {
+	return newRouter(tickets, healthCheck, cfg, tasks, security, notifications, activities, attachments)
+}
+
+func newRouter(tickets TicketUseCase, healthCheck func(context.Context) error, cfg config.Config, tasks TaskUseCase, security SecurityUseCase, notifications NotificationUseCase, activities ActivityUseCase, attachments AttachmentUseCase) *gin.Engine {
 	if cfg.GinMode != "" {
 		gin.SetMode(cfg.GinMode)
 	}
@@ -126,18 +184,18 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 		c.JSON(http.StatusOK, gin.H{"ok": true, "database": "connected"})
 	})
 
-	handler := &Handler{tickets: tickets, assistant: groqapi.NewClient(cfg.GroqAPIKey, cfg.GroqModel), assistantRates: make(map[string]assistantRateEntry)}
-	if len(taskServices) > 0 {
-		handler.tasks = taskServices[0]
-	}
+	handler := &Handler{tickets: tickets, tasks: tasks, security: security, notifications: notifications, activities: activities, attachments: attachments, assistant: groqapi.NewClient(cfg.GroqAPIKey, cfg.GroqModel), assistantRates: make(map[string]assistantRateEntry)}
 	site := router.Group("/")
-	if cfg.AppUser != "" && cfg.AppPassword != "" {
+	if security != nil {
+		site.Use(handler.authenticate())
+		log.Println("Database-backed authentication enabled")
+	} else if cfg.AppUser != "" && cfg.AppPassword != "" {
 		site.Use(gin.BasicAuth(gin.Accounts{cfg.AppUser: cfg.AppPassword}))
 		log.Println("🔒 Basic Auth enabled")
 	}
 	site.Use(func(c *gin.Context) {
 		path := c.Request.URL.Path
-		if path == "/" || path == "/dashboard" || path == "/admin" || path == "/admin/tasks" {
+		if path == "/" || path == "/dashboard" || path == "/admin" || path == "/admin/tasks" || path == "/admin/users" || path == "/admin/audit" {
 			c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
 			c.Header("Pragma", "no-cache")
 		}
@@ -147,12 +205,39 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 	site.StaticFile("/dashboard", "./static/index.html")
 	site.StaticFile("/admin", "./static/admin.html")
 	site.StaticFile("/admin/tasks", "./static/admin-tasks.html")
+	site.GET("/admin/users", handler.requireRoles("admin"), func(c *gin.Context) { c.File("./static/admin-users.html") })
+	site.GET("/admin/audit", handler.requireRoles("admin", "manager"), func(c *gin.Context) { c.File("./static/admin-audit.html") })
 	site.StaticFile("/theme.css", "./static/theme.css")
 	site.StaticFile("/premium.css", "./static/premium.css")
 	site.StaticFile("/experience.css", "./static/experience.css")
 	site.StaticFile("/theme.js", "./static/theme.js")
+	site.StaticFile("/notifications.js", "./static/notifications.js")
+	site.StaticFile("/work-activity.js", "./static/work-activity.js")
 
 	api := site.Group("/api")
+	if security != nil {
+		api.Use(handler.requireRoles("admin", "manager", "agent"))
+		api.Use(handler.auditWrites())
+		api.GET("/auth/me", handler.currentUser)
+		api.GET("/admin/users", handler.requireRoles("admin"), handler.listUsers)
+		api.POST("/admin/users", handler.requireRoles("admin"), handler.createUser)
+		api.PUT("/admin/users/:id", handler.requireRoles("admin"), handler.updateUser)
+		api.GET("/admin/audit", handler.requireRoles("admin", "manager"), handler.listAudit)
+		if notifications != nil {
+			api.GET("/notifications", handler.listNotifications)
+			api.POST("/notifications/read-all", handler.markAllNotificationsRead)
+			api.POST("/notifications/:id/read", handler.markNotificationRead)
+		}
+		if activities != nil {
+			api.GET("/work/:type/:id/activity", handler.listWorkActivity)
+			api.POST("/work/:type/:id/comments", handler.createWorkComment)
+		}
+		if attachments != nil {
+			api.GET("/work/:type/:id/attachments", handler.listWorkAttachments)
+			api.POST("/work/:type/:id/attachments", handler.uploadWorkAttachment)
+			api.GET("/work/:type/:id/attachments/:attachmentID", handler.downloadWorkAttachment)
+		}
+	}
 	api.GET("/search", handler.searchEmployees)
 	api.GET("/assistant/status", handler.assistantStatus)
 	api.POST("/assistant", handler.assistantChat)
@@ -173,6 +258,443 @@ func NewRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 		c.JSON(http.StatusNotFound, gin.H{"error": "page not found"})
 	})
 	return router
+}
+
+const authenticatedUserKey = "authenticatedUser"
+
+func (h *Handler) authenticate() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		username, password, ok := c.Request.BasicAuth()
+		if !ok || len(username) > 64 || len(password) > 72 {
+			httpAuthChallenge(c)
+			return
+		}
+		user, err := h.security.Authenticate(c.Request.Context(), username, password)
+		if err != nil {
+			httpAuthChallenge(c)
+			return
+		}
+		c.Set(authenticatedUserKey, user)
+		c.Next()
+	}
+}
+
+func httpAuthChallenge(c *gin.Context) {
+	c.Header("WWW-Authenticate", `Basic realm="Auto Ticket System", charset="UTF-8"`)
+	c.AbortWithStatus(http.StatusUnauthorized)
+}
+
+func (h *Handler) requireRoles(roles ...string) gin.HandlerFunc {
+	allowed := make(map[string]struct{}, len(roles))
+	for _, role := range roles {
+		allowed[role] = struct{}{}
+	}
+	return func(c *gin.Context) {
+		value, exists := c.Get(authenticatedUserKey)
+		user, valid := value.(domain.User)
+		if !exists || !valid {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			return
+		}
+		if _, ok := allowed[user.Role]; !ok {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "your role cannot access this resource"})
+			return
+		}
+		c.Next()
+	}
+}
+
+func (h *Handler) currentUser(c *gin.Context) {
+	user, ok := currentAuthenticatedUser(c)
+	if !ok {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"user": user})
+}
+
+func (h *Handler) listUsers(c *gin.Context) {
+	users, err := h.security.ListUsers(c.Request.Context())
+	if err != nil {
+		log.Printf("user list failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load users"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"users": users})
+}
+
+type createUserRequest struct {
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Role        string `json:"role"`
+	Password    string `json:"password"`
+}
+
+func (h *Handler) createUser(c *gin.Context) {
+	var request createUserRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user details"})
+		return
+	}
+	user, err := h.security.CreateUser(c.Request.Context(), domain.UserInput{
+		Username: request.Username, DisplayName: request.DisplayName,
+		Role: request.Role, Password: request.Password, Active: true,
+	})
+	if err != nil {
+		writeSecurityError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"user": user})
+}
+
+type updateUserRequest struct {
+	DisplayName string `json:"display_name"`
+	Role        string `json:"role"`
+	Password    string `json:"password"`
+	Active      bool   `json:"active"`
+}
+
+func (h *Handler) updateUser(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
+		return
+	}
+	var request updateUserRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user details"})
+		return
+	}
+	user, err := h.security.UpdateUser(c.Request.Context(), uint(id), domain.UserUpdate{
+		DisplayName: request.DisplayName, Role: request.Role,
+		Password: request.Password, Active: request.Active,
+	})
+	if err != nil {
+		writeSecurityError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"user": user})
+}
+
+func (h *Handler) listAudit(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	events, err := h.security.ListAudit(c.Request.Context(), limit)
+	if err != nil {
+		log.Printf("audit list failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load audit history"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"events": events})
+}
+
+func (h *Handler) listNotifications(c *gin.Context) {
+	user, ok := currentAuthenticatedUser(c)
+	if !ok {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	unreadOnly, _ := strconv.ParseBool(c.Query("unread_only"))
+	items, unreadCount, err := h.notifications.List(c.Request.Context(), user.ID, unreadOnly, limit)
+	if err != nil {
+		log.Printf("notification list failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load notifications"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"notifications": items, "unread_count": unreadCount})
+}
+
+func (h *Handler) markNotificationRead(c *gin.Context) {
+	user, ok := currentAuthenticatedUser(c)
+	if !ok {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	parsedID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || parsedID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid notification ID"})
+		return
+	}
+	updated, err := h.notifications.MarkRead(c.Request.Context(), user.ID, uint(parsedID))
+	if err != nil {
+		log.Printf("notification mark-read failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update notification"})
+		return
+	}
+	if !updated {
+		c.JSON(http.StatusNotFound, gin.H{"error": "notification not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"read": true})
+}
+
+func (h *Handler) markAllNotificationsRead(c *gin.Context) {
+	user, ok := currentAuthenticatedUser(c)
+	if !ok {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	if err := h.notifications.MarkAllRead(c.Request.Context(), user.ID); err != nil {
+		log.Printf("mark all notifications read failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update notifications"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"read": true})
+}
+
+type taskGetter interface {
+	Get(ctx context.Context, id uint) (domain.Task, error)
+}
+
+func (h *Handler) resolveWorkID(c *gin.Context) (uint, bool) {
+	workType := strings.ToLower(strings.TrimSpace(c.Param("type")))
+	key := strings.TrimSpace(c.Param("id"))
+	switch workType {
+	case "ticket":
+		ticket, err := h.tickets.Get(c.Request.Context(), key)
+		if errors.Is(err, domain.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "ticket not found"})
+			return 0, false
+		}
+		if err != nil {
+			log.Printf("ticket activity lookup failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not find ticket"})
+			return 0, false
+		}
+		return ticket.ID, true
+	case "task":
+		id, err := strconv.ParseUint(key, 10, 64)
+		if err != nil || id == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task ID"})
+			return 0, false
+		}
+		getter, ok := h.tasks.(taskGetter)
+		if !ok {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "task lookup is unavailable"})
+			return 0, false
+		}
+		if _, err := getter.Get(c.Request.Context(), uint(id)); errors.Is(err, domain.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+			return 0, false
+		} else if err != nil {
+			log.Printf("task activity lookup failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not find task"})
+			return 0, false
+		}
+		return uint(id), true
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "work type must be ticket or task"})
+		return 0, false
+	}
+}
+
+func (h *Handler) listWorkActivity(c *gin.Context) {
+	workID, ok := h.resolveWorkID(c)
+	if !ok {
+		return
+	}
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	activities, err := h.activities.List(c.Request.Context(), c.Param("type"), workID, limit)
+	if err != nil {
+		log.Printf("work activity list failed for %s:%d", c.Param("type"), workID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load work history"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"activities": activities})
+}
+
+type workCommentRequest struct {
+	Message string `json:"message"`
+}
+
+func (h *Handler) createWorkComment(c *gin.Context) {
+	workID, ok := h.resolveWorkID(c)
+	if !ok {
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 10<<10)
+	var request workCommentRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "comment must be valid JSON and under 10 KB"})
+		return
+	}
+	if _, ok := currentAuthenticatedUser(c); !ok {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	actor, _ := currentAuthenticatedUser(c)
+	activity, err := h.activities.Record(c.Request.Context(), actor, c.Param("type"), workID, "comment", request.Message)
+	if err != nil {
+		if errors.Is(err, usecase.ErrInvalidActivity) || errors.Is(err, usecase.ErrInvalidWorkType) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "comment must contain 1 to 2,000 characters"})
+			return
+		}
+		log.Printf("work comment save failed for %s:%d", c.Param("type"), workID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not save comment"})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"activity": activity})
+}
+
+func (h *Handler) recordWorkActivity(c *gin.Context, workType string, workID uint, kind, message string) {
+	if h.activities == nil || workID == 0 {
+		return
+	}
+	actor, ok := currentAuthenticatedUser(c)
+	if !ok {
+		return
+	}
+	if _, err := h.activities.Record(c.Request.Context(), actor, workType, workID, kind, message); err != nil {
+		log.Printf("could not record %s activity for %s:%d", kind, workType, workID)
+	}
+}
+
+func (h *Handler) listWorkAttachments(c *gin.Context) {
+	workID, ok := h.resolveWorkID(c)
+	if !ok {
+		return
+	}
+	attachments, err := h.attachments.List(c.Request.Context(), strings.ToLower(c.Param("type")), workID)
+	if err != nil {
+		log.Printf("attachment list failed for %s:%d", c.Param("type"), workID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load attachments"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"attachments": attachments})
+}
+
+func (h *Handler) uploadWorkAttachment(c *gin.Context) {
+	workID, ok := h.resolveWorkID(c)
+	if !ok {
+		return
+	}
+	const maxRequestBytes = usecase.MaxAttachmentBytes + (1 << 20)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBytes)
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if c.Request.MultipartForm != nil {
+			defer c.Request.MultipartForm.RemoveAll()
+		}
+		if errors.As(err, &tooLarge) || errors.Is(err, multipart.ErrMessageTooLarge) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file exceeds the 10 MB limit"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "choose a file to upload"})
+		return
+	}
+	defer file.Close()
+	if c.Request.MultipartForm != nil {
+		defer c.Request.MultipartForm.RemoveAll()
+	}
+	actor, ok := currentAuthenticatedUser(c)
+	if !ok {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	workType := strings.ToLower(c.Param("type"))
+	attachment, err := h.attachments.Upload(c.Request.Context(), actor, workType, workID, header.Filename, file)
+	if err != nil {
+		if errors.Is(err, usecase.ErrAttachmentTooLarge) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file exceeds the 10 MB limit"})
+			return
+		}
+		if errors.Is(err, usecase.ErrInvalidAttachment) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "use a valid PDF, image, TXT, or CSV file (maximum 10 MB)"})
+			return
+		}
+		log.Printf("attachment upload failed for %s:%d", workType, workID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not save attachment"})
+		return
+	}
+	h.recordWorkActivity(c, workType, workID, "attachment_added", "Attachment uploaded: "+attachment.OriginalName)
+	c.JSON(http.StatusCreated, gin.H{"attachment": attachment})
+}
+
+func (h *Handler) downloadWorkAttachment(c *gin.Context) {
+	workID, ok := h.resolveWorkID(c)
+	if !ok {
+		return
+	}
+	parsedID, err := strconv.ParseUint(c.Param("attachmentID"), 10, 64)
+	if err != nil || parsedID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid attachment ID"})
+		return
+	}
+	attachment, file, err := h.attachments.Download(c.Request.Context(), strings.ToLower(c.Param("type")), workID, uint(parsedID))
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "attachment not found"})
+			return
+		}
+		log.Printf("attachment download failed for %s:%d attachment:%d", c.Param("type"), workID, parsedID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not download attachment"})
+		return
+	}
+	defer file.Close()
+	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": attachment.OriginalName})
+	c.Header("Content-Type", attachment.ContentType)
+	c.Header("Content-Disposition", disposition)
+	c.Header("Content-Length", strconv.FormatInt(attachment.Size, 10))
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Cache-Control", "private, no-store")
+	c.Status(http.StatusOK)
+	if _, err := io.Copy(c.Writer, file); err != nil {
+		log.Printf("attachment response interrupted for %s:%d attachment:%d", c.Param("type"), workID, parsedID)
+	}
+}
+
+func writeSecurityError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, usecase.ErrInvalidUser), errors.Is(err, usecase.ErrWeakPassword):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, usecase.ErrUsernameTaken):
+		c.JSON(http.StatusConflict, gin.H{"error": "username is already in use"})
+	case errors.Is(err, usecase.ErrLastAdmin):
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+	case errors.Is(err, domain.ErrNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+	default:
+		log.Printf("user management failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not save user changes"})
+	}
+}
+
+func currentAuthenticatedUser(c *gin.Context) (domain.User, bool) {
+	value, ok := c.Get(authenticatedUserKey)
+	user, valid := value.(domain.User)
+	return user, ok && valid
+}
+
+func (h *Handler) auditWrites() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		method := c.Request.Method
+		if method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
+			c.Next()
+			return
+		}
+		c.Next()
+		user, ok := currentAuthenticatedUser(c)
+		if !ok {
+			return
+		}
+		resource := c.Request.URL.Path
+		if len(resource) > 240 {
+			resource = resource[:240]
+		}
+		userAgent := c.Request.UserAgent()
+		if len(userAgent) > 256 {
+			userAgent = userAgent[:256]
+		}
+		event := domain.AuditEvent{
+			UserID: user.ID, Username: user.Username, Role: user.Role,
+			Action: method, Resource: resource, StatusCode: c.Writer.Status(),
+			IPAddress: c.ClientIP(), UserAgent: userAgent, CreatedAt: time.Now().UTC(),
+		}
+		if err := h.security.RecordAudit(c.Request.Context(), event); err != nil {
+			log.Printf("could not record audit event for %s %s", method, resource)
+		}
+	}
 }
 
 func (h *Handler) assistantStatus(c *gin.Context) {
@@ -861,6 +1383,7 @@ func (h *Handler) assistantChat(c *gin.Context) {
 		h.writeCreateError(c, err)
 		return
 	}
+	h.recordWorkActivity(c, "ticket", ticket.ID, "created", "Ticket created for "+ticket.EmployeeName)
 	reply := fmt.Sprintf("Pending ticket %s তৈরি হয়েছে।", ticket.TicketNumber)
 	if ticket.AssignedTo != "" {
 		reply += " Assignee: " + ticket.AssignedTo + "."
@@ -1008,6 +1531,7 @@ func (h *Handler) assistantTaskChat(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create task"})
 		return
 	}
+	h.recordWorkActivity(c, "task", task.ID, "created", "Task created: "+task.Title)
 	reply := fmt.Sprintf("Task TSK-%06d created.", task.ID)
 	if task.AssignedTo != "" {
 		reply += " Assigned to " + task.AssignedTo + "."
@@ -1069,9 +1593,13 @@ func (h *Handler) setTicketStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON request"})
 		return
 	}
+	previous, previousErr := h.tickets.Get(c.Request.Context(), c.Param("id"))
 	ticket, emailQueued, err := h.tickets.SetStatus(c.Request.Context(), c.Param("id"), request.Status)
 	switch err {
 	case nil:
+		if previousErr == nil && previous.Status != ticket.Status {
+			h.recordWorkActivity(c, "ticket", ticket.ID, "status_changed", fmt.Sprintf("Status changed: %s → %s", previous.Status, ticket.Status))
+		}
 		c.JSON(http.StatusOK, toView(ticket, emailQueued))
 	case usecase.ErrInvalidStatus:
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -1089,9 +1617,21 @@ func (h *Handler) assignTicket(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON request"})
 		return
 	}
+	previous, previousErr := h.tickets.Get(c.Request.Context(), c.Param("id"))
 	ticket, err := h.tickets.Assign(c.Request.Context(), c.Param("id"), request.Assignee)
 	switch err {
 	case nil:
+		if previousErr == nil && previous.AssignedTo != ticket.AssignedTo {
+			oldAssignee := previous.AssignedTo
+			if strings.TrimSpace(oldAssignee) == "" {
+				oldAssignee = "Unassigned"
+			}
+			newAssignee := ticket.AssignedTo
+			if strings.TrimSpace(newAssignee) == "" {
+				newAssignee = "Unassigned"
+			}
+			h.recordWorkActivity(c, "ticket", ticket.ID, "assignee_changed", fmt.Sprintf("Assignee changed: %s → %s", oldAssignee, newAssignee))
+		}
 		c.JSON(http.StatusOK, toView(ticket, false))
 	case usecase.ErrAssigneeTooLong:
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -1113,9 +1653,13 @@ func (h *Handler) setTicketPriority(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON request"})
 		return
 	}
+	previous, previousErr := h.tickets.Get(c.Request.Context(), c.Param("id"))
 	ticket, err := h.tickets.SetPriority(c.Request.Context(), c.Param("id"), request.Priority)
 	switch err {
 	case nil:
+		if previousErr == nil && previous.Priority != ticket.Priority {
+			h.recordWorkActivity(c, "ticket", ticket.ID, "priority_changed", fmt.Sprintf("Priority changed: %s → %s", previous.Priority, ticket.Priority))
+		}
 		c.JSON(http.StatusOK, toView(ticket, false))
 	case usecase.ErrInvalidPriority:
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -1141,6 +1685,7 @@ func (h *Handler) createTicket(c *gin.Context) {
 		h.writeCreateError(c, err)
 		return
 	}
+	h.recordWorkActivity(c, "ticket", ticket.ID, "created", "Ticket created for "+ticket.EmployeeName)
 	c.JSON(http.StatusCreated, toView(ticket, emailQueued))
 }
 
@@ -1182,6 +1727,7 @@ func (h *Handler) markDone(c *gin.Context) {
 		})
 		return
 	}
+	h.recordWorkActivity(c, "ticket", result.Ticket.ID, "status_changed", "Status changed to done")
 	c.JSON(http.StatusOK, gin.H{
 		"message": "ticket completed", "already_done": false,
 		"ticket": toView(result.Ticket, result.EmailQueued),
@@ -1312,6 +1858,7 @@ func (h *Handler) createTask(c *gin.Context) {
 		writeTaskError(c, err)
 		return
 	}
+	h.recordWorkActivity(c, "task", task.ID, "created", "Task created: "+task.Title)
 	c.JSON(http.StatusCreated, gin.H{"task": toTaskView(task)})
 }
 
@@ -1338,6 +1885,10 @@ func (h *Handler) updateTask(c *gin.Context) {
 		}
 		request.AssignedTo = &resolved
 	}
+	var previous domain.Task
+	if getter, ok := h.tasks.(taskGetter); ok {
+		previous, _ = getter.Get(c.Request.Context(), uint(idValue))
+	}
 	task, err := h.tasks.Update(c.Request.Context(), uint(idValue), usecase.UpdateTaskInput{
 		Title: request.Title, Description: request.Description, CreatedBy: request.CreatedBy, AssignedTo: request.AssignedTo,
 		Priority: request.Priority, DueDate: request.DueDate, Status: request.Status,
@@ -1349,6 +1900,39 @@ func (h *Handler) updateTask(c *gin.Context) {
 		}
 		writeTaskError(c, err)
 		return
+	}
+	if previous.ID == 0 {
+		h.recordWorkActivity(c, "task", task.ID, "updated", "Task was updated")
+	} else {
+		if previous.Status != task.Status {
+			h.recordWorkActivity(c, "task", task.ID, "status_changed", fmt.Sprintf("Status changed: %s → %s", previous.Status, task.Status))
+		}
+		if previous.AssignedTo != task.AssignedTo {
+			oldAssignee, newAssignee := previous.AssignedTo, task.AssignedTo
+			if strings.TrimSpace(oldAssignee) == "" {
+				oldAssignee = usecase.DefaultTaskAssignee
+			}
+			if strings.TrimSpace(newAssignee) == "" {
+				newAssignee = usecase.DefaultTaskAssignee
+			}
+			h.recordWorkActivity(c, "task", task.ID, "assignee_changed", fmt.Sprintf("Assignee changed: %s → %s", oldAssignee, newAssignee))
+		}
+		if previous.Priority != task.Priority {
+			h.recordWorkActivity(c, "task", task.ID, "priority_changed", fmt.Sprintf("Priority changed: %s → %s", previous.Priority, task.Priority))
+		}
+		if previous.DueDate != task.DueDate {
+			oldDue, newDue := previous.DueDate, task.DueDate
+			if oldDue == "" {
+				oldDue = "No due date"
+			}
+			if newDue == "" {
+				newDue = "No due date"
+			}
+			h.recordWorkActivity(c, "task", task.ID, "updated", fmt.Sprintf("Due date changed: %s → %s", oldDue, newDue))
+		}
+		if previous.Title != task.Title || previous.Description != task.Description || previous.CreatedBy != task.CreatedBy {
+			h.recordWorkActivity(c, "task", task.ID, "updated", "Task details or Given by were updated")
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"task": toTaskView(task)})
 }

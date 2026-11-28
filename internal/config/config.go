@@ -27,6 +27,7 @@ type Config struct {
 	SMTPFromName    string
 	GroqAPIKey      string
 	GroqModel       string
+	AttachmentDir   string
 }
 
 func Load() (Config, error) {
@@ -54,6 +55,7 @@ func Load() (Config, error) {
 		SMTPFromName:    value("SMTP_FROM_NAME", "Auto Ticket System"),
 		GroqAPIKey:      value("GROQ_API_KEY", ""),
 		GroqModel:       value("GROQ_MODEL", "openai/gpt-oss-20b"),
+		AttachmentDir:   value("ATTACHMENT_DIR", "attachments"),
 	}, nil
 }
 

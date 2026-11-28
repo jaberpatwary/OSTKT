@@ -30,7 +30,7 @@
       <nav class="flex flex-wrap gap-2">
         <button id="themeToggle" type="button" data-theme-toggle class="task-header-button" aria-pressed="false">🌙 Dark mode</button>
         <a href="/?view=tasks" class="task-header-button">← Task board</a>
-        <a href="/admin" class="task-header-button">Ticket admin</a><a href="/dashboard" class="task-header-button">Ticket dashboard</a><button id="taskAdminRefresh" type="button" class="task-header-button">↻ Refresh</button>
+        <a href="/admin" class="task-header-button">Ticket admin</a><a href="/admin/users" data-roles="admin" class="task-header-button">Users &amp; roles</a><a href="/admin/audit" data-roles="admin,manager" class="task-header-button">Audit</a><a href="/dashboard" class="task-header-button">Ticket dashboard</a><button id="taskAdminRefresh" type="button" class="task-header-button">↻ Refresh</button>
       </nav>
     </header>
 
@@ -142,6 +142,7 @@
         [['pending', 'Pending'], ['in_progress', 'In progress'], ['done', 'Done']].forEach(([value, label]) => taskStatus.append(new Option(label, value)));
         taskStatus.value = task.status || 'pending'; statusCell.append(taskStatus);
         const actionCell = document.createElement('td'); actionCell.className = 'px-4 py-3';
+        const actions = document.createElement('div'); actions.className = 'flex flex-wrap items-center gap-2';
         const save = document.createElement('button'); save.type = 'button'; save.className = 'rounded-lg bg-violet-700 px-3 py-2 text-xs font-bold text-white hover:bg-violet-800'; save.textContent = 'Save';
         save.addEventListener('click', async () => {
           save.disabled = true; save.textContent = 'Saving…'; $('taskAdminError').classList.add('hidden');
@@ -155,7 +156,9 @@
             save.disabled = false; save.textContent = 'Retry'; $('taskAdminError').textContent = error.message || 'Task update failed.'; $('taskAdminError').classList.remove('hidden');
           }
         });
-        actionCell.append(save); row.append(details, givenByCell, ownerCell, statusCell, actionCell); return row;
+        const history = document.createElement('button'); history.type = 'button'; history.className = 'rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50'; history.textContent = 'History';
+        history.dataset.workActivity = 'task'; history.dataset.workId = String(task.id); history.dataset.workTitle = 'TSK-' + String(task.id).padStart(6, '0');
+        actions.append(save, history); actionCell.append(actions); row.append(details, givenByCell, ownerCell, statusCell, actionCell); return row;
       }));
       $('taskEmpty').classList.toggle('hidden', visible.length > 0);
       const hasFilters = Boolean(query || status);
@@ -189,6 +192,8 @@
     loadTasks();
   })();
   </script>
-  <script src="/theme.js"></script>
+  <script src="/theme.js?v=security-rbac1"></script>
+  <script src="/notifications.js?v=step2-alerts"></script>
+  <script src="/work-activity.js?v=activity-step3"></script>
 </body>
 </html>

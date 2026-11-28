@@ -165,14 +165,14 @@ SMTP_USER       = (Brevo login)
 SMTP_PASS       = (Brevo SMTP key)
 SMTP_FROM       = (verified sender)
 SMTP_FROM_NAME  = Auto Ticket System
-APP_USER        = admin               ← সাইটে লগইন
+APP_USER        = admin               ← initial administrator only
 APP_PASS        = (শক্ত পাসওয়ার্ড)
 GIN_MODE        = release
 ```
 
 > 🚨 **Render free tier-এ SMTP port 25, 465, 587 ব্লক করা** (সেপ্টেম্বর ২০২৫ থেকে)। তাই Render-এ `SMTP_PORT=2525` দিন — Brevo এই পোর্ট সাপোর্ট করে, কোড বদলাতে হবে না। লোকালে 587 চলবে।
 
-> 🔒 **APP_USER / APP_PASS অবশ্যই দিন।** না দিলে লিংক জানা যে কেউ employee-দের তথ্য দেখতে ও তাদের ইমেইল পাঠাতে পারবে। দিলে ব্রাউজার একবার ইউজারনেম-পাসওয়ার্ড চাইবে।
+> `APP_USER` and `APP_PASS` are required to create the initial administrator in an empty database. Passwords are hashed and later managed from `/admin/users`.
 
 **৪. Deploy** চাপুন। কয়েক মিনিট পর `https://your-app.onrender.com` লিংক পাবেন।
 
@@ -214,7 +214,7 @@ curl -X POST http://localhost:8080/api/tickets/TKT-20260410-4821/done
 curl "http://localhost:8080/api/tickets?status=pending"
 ```
 
-(`APP_USER/APP_PASS` চালু থাকলে curl-এ `-u admin:password` যোগ করুন।)
+(Use the username and password of an active account with curl Basic Auth, for example `-u username:password`.)
 
 ---
 
@@ -255,7 +255,8 @@ curl "http://localhost:8080/api/tickets?status=pending"
 | `SMTP_FROM` / `SMTP_FROM_NAME` | `SMTP_USER` / `Auto Ticket System` | প্রেরক |
 | `GROQ_API_KEY` | — | Chat assistant-এর server-side Groq key |
 | `GROQ_MODEL` | `openai/gpt-oss-20b` | Ticket তথ্য extraction model |
-| `APP_USER` / `APP_PASS` | — | দুটোই দিলে পুরো সাইটে লগইন |
+| `ATTACHMENT_DIR` | `attachments` | Uploaded ticket/task files; use persistent storage in production |
+| `APP_USER` / `APP_PASS` | — | Initial administrator credentials, used only when the users table is empty |
 | `APP_TIMEZONE` | `Asia/Dhaka` | টিকিট নম্বরের তারিখ ও ইমেইলের সময় |
 | `GIN_MODE` | `debug` | প্রোডাকশনে `release` |
 
@@ -300,6 +301,30 @@ flowchart LR
 Business rules and ticket lifecycle live in the use case layer. The PostgreSQL/SQLite, Excel, SMTP, and Gin integrations sit in adapters, so those libraries do not define the business flow.
 
 The Admin Panel is available at `/admin`. Ticket creation accepts a required problem description and optional assignee. In the Admin Panel, the description is visible and the assignee can be changed or cleared. Both fields are saved in PostgreSQL.
+
+## User accounts, roles, and audit history
+
+On first startup, `APP_USER` and `APP_PASS` create the initial administrator only when the database has no user accounts. Passwords are stored as bcrypt hashes. After startup, manage accounts at `/admin/users`; changing the environment variables later does not overwrite database passwords. New accounts require passwords with at least 12 characters.
+
+The initial roles are:
+
+- **Admin:** all ticket and task operations, user management, and audit history.
+- **Manager:** ticket and task operations, plus read-only audit history.
+- **Agent:** ticket and task operations.
+
+Admins can deactivate accounts or change their role. The final active administrator cannot be deactivated or demoted. The audit page at `/admin/audit` records each authenticated write request's actor, role, action, route, response code, IP address, browser, and time. It intentionally does not store request bodies or passwords. The system uses HTTP Basic authentication, so production deployments must terminate HTTPS in front of the app.
+
+## Automatic work alerts
+
+The background scanner runs every five minutes. It creates an in-app alert when an open ticket's SLA is within four hours or overdue, and when an open task is due within 24 hours or overdue. Task due dates are treated as the end of that date in `APP_TIMEZONE`. Alerts are saved once per user and work item, so repeated scans do not create duplicates. They appear from the bell on the ticket, task, and admin pages and can be marked read individually or all at once.
+
+Admins and managers receive all alerts. An agent receives alerts assigned to an account whose username or display name matches the assignee; unassigned work or unmatched assignees are sent to all active agents. These are in-app alerts; SMTP and browser push are not required.
+
+## Ticket and task work history
+
+Ticket Admin, Task Admin, and the task board provide a **History** action for each item. The timeline records creation, status, assignee, priority, due-date, and task-detail changes, with the acting account and timestamp. Team members can add internal work notes up to 2,000 characters. Timeline entries are stored separately from the security audit log; notes are visible to authenticated service-desk accounts and are rendered as plain text.
+
+The same History panel supports private work-item attachments: PDF, PNG/JPG/GIF/WEBP images, TXT, and CSV files up to 10 MB each. Uploads are checked against their file content, stored outside the public static directory under generated names, and downloaded only through the authenticated API. Docker Compose persists them in the `ticket-attachments` volume across rebuilds. Set `ATTACHMENT_DIR` to a persistent disk path on hosted deployments; back up that directory together with the database.
 
 ## Ticket priority and response targets
 

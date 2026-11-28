@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#111a2b" />
+  <script>try { if (localStorage.getItem('ost-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (_) {}</script>
+  <title>User access · Service Desk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="stylesheet" href="/theme.css?v=20261126-full-redesign9" />
+  <link rel="stylesheet" href="/premium.css?v=20261126-full-redesign9" />
+  <link rel="stylesheet" href="/experience.css?v=20261126-signal-desk2" />
+  <style>body{font-family:Manrope,system-ui,sans-serif}html.dark .surface{background:#151e35!important;border-color:#334268!important}html.dark .field{background:#111a2b!important;color:#edf3ff!important;border-color:#334268!important}</style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+  <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <header class="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-gradient-to-r from-indigo-950 via-indigo-800 to-teal-800 px-6 py-6 text-white shadow-xl sm:px-8">
+      <div><p class="text-xs font-extrabold uppercase tracking-[.2em] text-teal-200">SECURITY · ACCESS CONTROL</p><h1 class="mt-1 text-3xl font-extrabold">Users & roles</h1><p class="mt-1 text-sm text-indigo-100">Create accounts and control access to the service desk.</p></div>
+      <nav class="flex flex-wrap gap-2"><button type="button" data-theme-toggle class="rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-semibold">Dark mode</button><a class="rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-semibold" href="/admin">Ticket admin</a><a class="rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-semibold" href="/admin/tasks">Task admin</a><a class="rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-semibold" href="/admin/audit">Audit history</a></nav>
+    </header>
+    <section class="surface mt-6 grid gap-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm lg:grid-cols-[360px_1fr] lg:p-7">
+      <form id="createUserForm" class="h-fit rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5">
+        <p class="text-xs font-extrabold uppercase tracking-[.16em] text-indigo-600">NEW ACCOUNT</p><h2 class="mt-1 text-xl font-extrabold">Add a team member</h2>
+        <label class="mt-4 block text-sm font-bold" for="username">Username</label><input class="field mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" id="username" name="username" minlength="3" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._@+-]{2,63}" autocomplete="off" required />
+        <label class="mt-3 block text-sm font-bold" for="displayName">Display name</label><input class="field mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" id="displayName" name="display_name" maxlength="120" required />
+        <label class="mt-3 block text-sm font-bold" for="role">Role</label><select class="field mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" id="role" name="role"><option value="agent">Agent</option><option value="manager">Manager</option><option value="admin">Administrator</option></select>
+        <label class="mt-3 block text-sm font-bold" for="password">Temporary password</label><input class="field mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm" id="password" name="password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required /><p class="mt-1 text-xs text-slate-500">Use at least 12 characters. Passwords are stored as one-way hashes.</p>
+        <button class="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-3 font-extrabold text-white hover:bg-indigo-700" type="submit">Create account</button>
+        <p id="formMessage" role="status" class="mt-3 min-h-5 text-sm font-semibold"></p>
+      </form>
+      <section>
+        <div class="flex flex-wrap items-end justify-between gap-3"><div><p class="text-xs font-extrabold uppercase tracking-[.16em] text-teal-600">ACCESS DIRECTORY</p><h2 class="mt-1 text-xl font-extrabold">Manage existing users</h2><p id="userCount" class="mt-1 text-sm text-slate-500">Loading accounts…</p></div><button id="refreshUsers" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold hover:bg-slate-50" type="button">Refresh</button></div>
+        <div id="pageError" role="alert" class="mt-4 hidden rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"></div>
+        <div id="usersList" class="mt-4 grid gap-3"></div>
+      </section>
+    </section>
+  </main>
+  <script src="/theme.js?v=security-rbac1"></script>
+  <script>
+  (() => {
+    const $ = (id) => document.getElementById(id);
+    const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const showError = (message) => { $('pageError').textContent = message; $('pageError').classList.remove('hidden'); };
+    const request = async (url, options = {}) => {
+      const response = await fetch(url, { ...options, headers: { 'Content-Type':'application/json', ...(options.headers || {}) } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+      return data;
+    };
+    async function loadUsers() {
+      $('pageError').classList.add('hidden');
+      try {
+        const { users = [] } = await request('/api/admin/users');
+        $('userCount').textContent = `${users.length} account${users.length === 1 ? '' : 's'} · passwords never appear here`;
+        $('usersList').innerHTML = users.map((user) => `<article class="surface rounded-2xl border border-slate-200 bg-white p-4" data-user-id="${user.id}">
+          <div class="grid gap-3 sm:grid-cols-[1fr_140px_130px] sm:items-end">
+            <div><p class="font-extrabold">${escapeHTML(user.display_name)}</p><p class="text-sm text-slate-500">@${escapeHTML(user.username)} · created ${new Date(user.created_at).toLocaleDateString()}</p></div>
+            <label class="text-xs font-bold uppercase tracking-wide text-slate-500">Role<select class="roleSelect field mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm normal-case tracking-normal text-slate-800"><option value="agent" ${user.role === 'agent'?'selected':''}>Agent</option><option value="manager" ${user.role === 'manager'?'selected':''}>Manager</option><option value="admin" ${user.role === 'admin'?'selected':''}>Admin</option></select></label>
+            <label class="flex items-center gap-2 pb-2 text-sm font-bold"><input class="activeCheck h-4 w-4 accent-teal-600" type="checkbox" ${user.active?'checked':''} /> Active</label>
+          </div>
+          <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_220px_auto] sm:items-end">
+            <label class="text-xs font-bold uppercase tracking-wide text-slate-500">Display name<input class="displayName field mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm normal-case tracking-normal text-slate-800" maxlength="120" value="${escapeHTML(user.display_name)}" /></label>
+            <label class="text-xs font-bold uppercase tracking-wide text-slate-500">New password (optional)<input class="newPassword field mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm normal-case tracking-normal text-slate-800" type="password" minlength="12" maxlength="72" autocomplete="new-password" placeholder="Leave blank to keep it" /></label>
+            <button class="saveUser rounded-lg bg-indigo-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-indigo-700" type="button">Save changes</button>
+          </div><p class="rowMessage mt-2 min-h-5 text-sm font-semibold" role="status"></p>
+        </article>`).join('') || '<p class="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">No accounts found.</p>';
+        $('usersList').querySelectorAll('.saveUser').forEach((button) => button.addEventListener('click', saveUser));
+      } catch (error) { showError(error.message); }
+    }
+    async function saveUser(event) {
+      const card = event.currentTarget.closest('[data-user-id]');
+      const msg = card.querySelector('.rowMessage'); msg.className = 'rowMessage mt-2 min-h-5 text-sm font-semibold'; msg.textContent = 'Saving…';
+      const password = card.querySelector('.newPassword').value;
+      try {
+        await request(`/api/admin/users/${card.dataset.userId}`, { method:'PUT', body:JSON.stringify({
+          display_name:card.querySelector('.displayName').value, role:card.querySelector('.roleSelect').value,
+          active:card.querySelector('.activeCheck').checked, password
+        }) });
+        msg.classList.add('text-emerald-700'); msg.textContent = 'Saved.'; card.querySelector('.newPassword').value = '';
+        await loadUsers();
+      } catch (error) { msg.classList.add('text-red-700'); msg.textContent = error.message; }
+    }
+    $('createUserForm').addEventListener('submit', async (event) => {
+      event.preventDefault(); $('formMessage').className = 'mt-3 min-h-5 text-sm font-semibold'; $('formMessage').textContent = 'Creating account…';
+      const form = new FormData(event.currentTarget);
+      try {
+        await request('/api/admin/users', { method:'POST', body:JSON.stringify(Object.fromEntries(form.entries())) });
+        $('formMessage').classList.add('text-emerald-700'); $('formMessage').textContent = 'Account created.'; event.currentTarget.reset(); $('role').value = 'agent'; await loadUsers();
+      } catch (error) { $('formMessage').classList.add('text-red-700'); $('formMessage').textContent = error.message; }
+    });
+    $('refreshUsers').addEventListener('click', loadUsers);
+    loadUsers();
+  })();
+  </script>
+  <script src="/notifications.js?v=step2-alerts"></script>
+</body>
+</html>

@@ -26,7 +26,7 @@
         <h1 class="mt-1 text-3xl font-bold text-slate-900">Admin Panel</h1>
         <p class="mt-1 text-slate-500">টিকিট দেখুন, status filter করুন, Pending টিকিট Done করুন।</p>
       </div>
-      <nav class="flex flex-wrap gap-2"><button id="themeToggle" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm hover:bg-slate-100" aria-pressed="false">🌙 Dark mode</button><a href="/" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm hover:bg-slate-100">← Ticket Form</a><a href="/dashboard" class="inline-flex items-center rounded-xl border border-cyan-200 bg-white px-4 py-2 font-semibold text-cyan-700 shadow-sm hover:bg-cyan-50">Dashboard</a><a href="/admin/tasks" class="inline-flex items-center rounded-xl border border-white/25 bg-white/10 px-4 py-2 font-semibold text-white hover:bg-white/20">Task admin</a><a href="/?view=tasks" class="inline-flex items-center rounded-xl border border-white/25 bg-white/10 px-4 py-2 font-semibold text-white hover:bg-white/20">Task board</a></nav>
+      <nav class="flex flex-wrap gap-2"><button id="themeToggle" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm hover:bg-slate-100" aria-pressed="false">🌙 Dark mode</button><a href="/" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm hover:bg-slate-100">← Ticket Form</a><a href="/dashboard" class="inline-flex items-center rounded-xl border border-cyan-200 bg-white px-4 py-2 font-semibold text-cyan-700 shadow-sm hover:bg-cyan-50">Dashboard</a><a href="/admin/tasks" class="inline-flex items-center rounded-xl border border-white/25 bg-white/10 px-4 py-2 font-semibold text-white hover:bg-white/20">Task admin</a><a href="/admin/users" data-roles="admin" class="inline-flex items-center rounded-xl border border-white/25 bg-white/10 px-4 py-2 font-semibold text-white hover:bg-white/20">Users &amp; roles</a><a href="/admin/audit" data-roles="admin,manager" class="inline-flex items-center rounded-xl border border-white/25 bg-white/10 px-4 py-2 font-semibold text-white hover:bg-white/20">Audit</a><a href="/?view=tasks" class="inline-flex items-center rounded-xl border border-white/25 bg-white/10 px-4 py-2 font-semibold text-white hover:bg-white/20">Task board</a></nav>
     </header>
 
     <section aria-label="Ticket summary" class="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-6">
@@ -264,9 +264,15 @@
           button.textContent = 'Done করুন';
           button.addEventListener('click', () => markDone(ticket, button));
           actionCell.append(button);
-        } else {
-          actionCell.textContent = '—';
         }
+        const historyButton = document.createElement('button');
+        historyButton.type = 'button';
+        historyButton.className = 'mt-1 rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50';
+        historyButton.textContent = 'History';
+        historyButton.dataset.workActivity = 'ticket';
+        historyButton.dataset.workId = String(ticket.id);
+        historyButton.dataset.workTitle = ticket.ticket_number || 'Ticket history';
+        actionCell.append(historyButton);
         const assigneeCell = document.createElement('td');
         assigneeCell.className = 'px-4 py-3';
         const assignment = document.createElement('div');
@@ -458,6 +464,8 @@
     loadTickets();
   })();
   </script>
-  <script src="/theme.js"></script>
+  <script src="/theme.js?v=security-rbac1"></script>
+  <script src="/notifications.js?v=step2-alerts"></script>
+  <script src="/work-activity.js?v=activity-step3"></script>
 </body>
 </html>

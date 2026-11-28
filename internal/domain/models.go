@@ -15,6 +15,7 @@ const (
 var (
 	ErrNotFound     = errors.New("record not found")
 	ErrDuplicateKey = errors.New("duplicate key")
+	ErrLastAdmin    = errors.New("cannot deactivate or demote the last active administrator")
 )
 
 type Employee struct {
@@ -75,6 +76,46 @@ type TaskFilter struct {
 	Assignee string
 	Query    string
 	Limit    int
+}
+
+// User is an internal application account. Password material is deliberately
+// kept out of the domain model returned to HTTP clients.
+type User struct {
+	ID          uint      `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName string    `json:"display_name"`
+	Role        string    `json:"role"`
+	Active      bool      `json:"active"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type UserInput struct {
+	Username    string
+	DisplayName string
+	Role        string
+	Password    string
+	Active      bool
+}
+
+type UserUpdate struct {
+	DisplayName string
+	Role        string
+	Password    string
+	Active      bool
+}
+
+type AuditEvent struct {
+	ID         uint      `json:"id"`
+	UserID     uint      `json:"user_id"`
+	Username   string    `json:"username"`
+	Role       string    `json:"role"`
+	Action     string    `json:"action"`
+	Resource   string    `json:"resource"`
+	StatusCode int       `json:"status_code"`
+	IPAddress  string    `json:"ip_address"`
+	UserAgent  string    `json:"user_agent"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type TaskRepository interface {

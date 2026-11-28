@@ -31,6 +31,7 @@ services:
       PORT: "8080"
       DATABASE_URL: postgres://ticket_app:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/ticketdb?sslmode=disable
       EXCEL_PATH: /data/employees.xlsx
+      ATTACHMENT_DIR: /data/attachments
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Dhaka}
       APP_USER: ${APP_USER:?Set APP_USER in .env}
       APP_PASS: ${APP_PASS:?Set APP_PASS in .env}
@@ -44,6 +45,7 @@ services:
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Auto Ticket System}
     volumes:
       - ./employees.xlsx:/data/employees.xlsx:ro
+      - ticket-attachments:/data/attachments
     ports:
       - "18080:8080"
     healthcheck:
@@ -77,4 +79,5 @@ services:
 
 volumes:
   ticket-postgres-data:
+  ticket-attachments:
   jenkins-home:

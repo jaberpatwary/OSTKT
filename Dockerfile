@@ -12,13 +12,14 @@ FROM alpine:3.21
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S app \
     && adduser -S -D -H -u 10001 -G app app \
-    && mkdir -p /app/static /data \
+    && mkdir -p /app/static /data/attachments \
     && chown -R app:app /app /data
 WORKDIR /app
 COPY --from=build --chown=app:app /out/auto-ticket-system /app/auto-ticket-system
 COPY --chown=app:app static/ /app/static/
 ENV PORT=8080 \
     EXCEL_PATH=/data/employees.xlsx \
+    ATTACHMENT_DIR=/data/attachments \
     APP_TIMEZONE=Asia/Dhaka \
     GIN_MODE=release
 USER app

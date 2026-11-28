@@ -9,7 +9,7 @@
     :root{color-scheme:dark;font-family:Manrope,Inter,Segoe UI,sans-serif;background:#0b1220;color:#e8eefc}
     *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at 15% 10%,#244070 0,transparent 42%),radial-gradient(ellipse at 90% 95%,#123d42 0,transparent 38%),#0b1220}
     .card{width:min(440px,100%);padding:30px 34px 34px;border:1px solid #324260;border-radius:24px;background:#121d30eF;box-shadow:0 28px 90px #020617aa;backdrop-filter:blur(14px)}
-    .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px}.language{height:36px;border:1px solid #3a4a67;border-radius:10px;background:#0c1526;padding:0 10px;color:#dbe6f8;font:600 12px Inter,Segoe UI,sans-serif;cursor:pointer}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px}.language-switch{display:inline-flex;align-items:center;gap:3px;padding:4px;border:1px solid #3a4a67;border-radius:12px;background:#0c1526}.language-option{border:0;border-radius:8px;background:transparent;padding:7px 10px;color:#9eacc3;font:600 12px Inter,Segoe UI,sans-serif;cursor:pointer}.language-option[aria-pressed="true"]{background:#293955;color:#fff}
     .mark{display:grid;place-items:center;width:52px;height:52px;border-radius:17px;background:linear-gradient(135deg,#6366f1,#0ea5a6);font-size:26px}
     h1{margin:22px 0 4px;font-size:26px;letter-spacing:-.04em}.sub{margin:0 0 26px;color:#9eacc3;font-size:13px}
     label{display:block;margin:16px 0 7px;color:#cbd6e8;font-size:12px;font-weight:700}
@@ -23,10 +23,10 @@
   <main class="card">
     <div class="topbar">
       <div class="mark" aria-hidden="true">✦</div>
-      <select class="language" id="languageSelect" aria-label="Language">
-        <option value="en">English</option>
-        <option value="bn">বাংলা</option>
-      </select>
+      <div class="language-switch" role="group" aria-label="Language">
+        <button class="language-option" type="button" data-language="en" aria-pressed="true">English</button>
+        <button class="language-option" type="button" data-language="bn" aria-pressed="false">বাংলা</button>
+      </div>
     </div>
     <h1 id="welcomeTitle">Welcome back</h1>
     <p class="sub" id="welcomeSubtitle">Sign in to your service desk workspace.</p>
@@ -47,7 +47,8 @@
       const form = document.getElementById('loginForm');
       const button = document.getElementById('submitButton');
       const error = document.getElementById('loginError');
-      const languageSelect = document.getElementById('languageSelect');
+      const languageButtons = Array.from(document.querySelectorAll('[data-language]'));
+      let currentLanguage = 'en';
       const translations = {
         en: { title: 'Sign in · Auto Ticket System', welcome: 'Welcome back', subtitle: 'Sign in to your service desk workspace.', language: 'Language', username: 'Username', password: 'Password', authCode: 'Authenticator code', mfaHint: '(if MFA is enabled)', submit: 'Sign in', signing: 'Signing in…', footer: 'Auto Ticket System · Authorized team members only', failed: 'Could not sign in.' },
         bn: { title: 'সাইন ইন · Auto Ticket System', welcome: 'আবার স্বাগতম', subtitle: 'আপনার সার্ভিস ডেস্কে সাইন ইন করুন।', language: 'ভাষা', username: 'ইউজারনেম', password: 'পাসওয়ার্ড', authCode: 'অথেন্টিকেটর কোড', mfaHint: '(MFA চালু থাকলে)', submit: 'সাইন ইন', signing: 'সাইন ইন হচ্ছে…', footer: 'Auto Ticket System · শুধু অনুমোদিত টিম সদস্যদের জন্য', failed: 'সাইন ইন করা যায়নি।' }
@@ -59,35 +60,35 @@
         document.title = t.title;
         document.getElementById('welcomeTitle').textContent = t.welcome;
         document.getElementById('welcomeSubtitle').textContent = t.subtitle;
-        languageSelect.setAttribute('aria-label', t.language);
         document.getElementById('usernameLabel').textContent = t.username;
         document.getElementById('passwordLabel').textContent = t.password;
         document.getElementById('authCodeLabel').textContent = t.authCode;
         document.getElementById('mfaHint').textContent = t.mfaHint;
         document.getElementById('footerText').textContent = t.footer;
         if (button.dataset.state === 'idle') button.textContent = t.submit;
-        languageSelect.value = selected;
+        currentLanguage = selected;
+        languageButtons.forEach((languageButton) => languageButton.setAttribute('aria-pressed', String(languageButton.dataset.language === selected)));
         try { localStorage.setItem('ost-login-language', selected); } catch (_) {}
       };
       try {
         const savedLanguage = localStorage.getItem('ost-login-language');
         setLanguage(savedLanguage && translations[savedLanguage] ? savedLanguage : 'en');
       } catch (_) { setLanguage('en'); }
-      languageSelect.addEventListener('change', () => setLanguage(languageSelect.value));
+      languageButtons.forEach((languageButton) => languageButton.addEventListener('click', () => setLanguage(languageButton.dataset.language)));
       form.addEventListener('submit', async (event) => {
-        event.preventDefault(); error.textContent = ''; button.disabled = true; button.dataset.state = 'busy'; button.textContent = translations[languageSelect.value].signing;
+        event.preventDefault(); error.textContent = ''; button.disabled = true; button.dataset.state = 'busy'; button.textContent = translations[currentLanguage].signing;
         try {
           const response = await fetch('/api/auth/login', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: document.getElementById('username').value, password: document.getElementById('password').value, otp_code: document.getElementById('otpCode').value })
           });
           const data = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(data.error || translations[languageSelect.value].failed);
+          if (!response.ok) throw new Error(data.error || translations[currentLanguage].failed);
           const next = new URLSearchParams(location.search).get('next') || '/dashboard';
           location.replace(next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard');
         } catch (err) {
-          error.textContent = err.message || translations[languageSelect.value].failed;
-          button.disabled = false; button.dataset.state = 'idle'; button.textContent = translations[languageSelect.value].submit;
+          error.textContent = err.message || translations[currentLanguage].failed;
+          button.disabled = false; button.dataset.state = 'idle'; button.textContent = translations[currentLanguage].submit;
         }
       });
     })();

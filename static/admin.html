@@ -93,13 +93,14 @@
 
       <div id="errorBox" role="alert" class="hidden m-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800"></div>
       <div class="overflow-x-auto">
-        <table class="w-full min-w-[1420px] text-left text-sm">
+        <table class="w-full min-w-[1520px] text-left text-sm">
           <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th scope="col" class="px-4 py-3">Ticket</th>
               <th scope="col" class="px-4 py-3">কর্মী</th>
               <th scope="col" class="px-4 py-3">বিভাগ</th>
               <th scope="col" class="px-4 py-3">সমস্যা</th>
+              <th scope="col" class="px-4 py-3">Asset tag</th>
               <th scope="col" class="px-4 py-3">Priority / SLA</th>
               <th scope="col" class="px-4 py-3">Assignee</th>
               <th scope="col" class="px-4 py-3">তৈরির সময়</th>
@@ -109,6 +110,10 @@
           </thead>
           <tbody id="ticketRows" class="divide-y divide-slate-100"></tbody>
         </table>
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3" role="navigation" aria-label="Ticket pages">
+        <span id="ticketPageSummary" class="text-xs text-slate-500">Page 1</span>
+        <div class="flex gap-2"><button id="ticketPrevPage" type="button" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-40">Previous</button><button id="ticketNextPage" type="button" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-40">Next</button></div>
       </div>
       <div id="emptyState" class="hidden px-4 py-12 text-center text-slate-500">এই filter-এ কোনো ticket নেই।</div>
       <p class="border-t border-slate-100 px-4 py-3 text-xs text-slate-400">নিরাপত্তার জন্য এই তালিকায় কর্মীর email ও phone দেখানো হয় না।</p>
@@ -128,6 +133,7 @@
     const dayFilter = $('ticketDayFilter');
     const dateScopeToggle = $('ticketDateScopeToggle');
     const exportButton = $('ticketExportCSV');
+    const pageSize = 50;
     const number = (value) => new Intl.NumberFormat('bn-BD').format(value);
     function ticketDayQuery() {
       const day = dayFilter.value;
@@ -142,7 +148,10 @@
       hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Dhaka'
     });
     let tickets = [];
+    let ticketTotal = 0;
+    let ticketPage = 0;
     let requestSequence = 0;
+    let ticketSearchTimer = 0;
 
     async function getJSON(path, options) {
       const response = await fetch(path, { cache: 'no-store', ...(options || {}) });
@@ -220,6 +229,7 @@
         id.textContent = employee.EmployeeID ? 'ID: ' + employee.EmployeeID : '';
         employeeCell.append(name, id);
         const problemCell = cell(ticket.problem, 'max-w-[320px] whitespace-pre-wrap break-words px-4 py-3 text-slate-600');
+        const assetCell = cell(ticket.asset_tag || '—', 'px-4 py-3 font-mono text-xs text-slate-600');
         const created = new Date(ticket.created_at);
         const date = Number.isNaN(created.getTime()) ? '—' : dateFmt.format(created);
         const priorityCell = document.createElement('td');
@@ -227,6 +237,8 @@
         const prioritySelect = document.createElement('select');
         prioritySelect.setAttribute('aria-label', (employee.Name || ticket.ticket_number || 'Ticket') + ' priority');
         prioritySelect.className = 'priority-select priority-' + (ticket.priority || 'medium');
+        prioritySelect.disabled = !!ticket.sla_paused;
+        if (ticket.sla_paused) prioritySelect.title = 'Resume SLA before changing priority';
         [['urgent', 'Urgent'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']].forEach(([value, label]) => {
           const option = document.createElement('option'); option.value = value; option.textContent = label; prioritySelect.append(option);
         });
@@ -237,6 +249,8 @@
         dueLabel.className = 'mt-1 text-xs font-medium';
         if (ticket.status === 'done') {
           dueLabel.classList.add('text-emerald-700'); dueLabel.textContent = 'Resolved';
+        } else if (ticket.sla_paused) {
+          dueLabel.classList.add('text-slate-500'); dueLabel.textContent = 'SLA paused · waiting';
         } else if (!Number.isNaN(dueAt.getTime()) && dueAt.getTime() < Date.now()) {
           dueLabel.classList.add('text-rose-700'); dueLabel.textContent = 'Overdue · ' + dateFmt.format(dueAt);
         } else if (!Number.isNaN(dueAt.getTime()) && dueAt.getTime() < Date.now() + 4 * 60 * 60 * 1000) {
@@ -245,6 +259,15 @@
           dueLabel.classList.add('text-slate-500'); dueLabel.textContent = Number.isNaN(dueAt.getTime()) ? 'SLA not set' : 'Due · ' + dateFmt.format(dueAt);
         }
         priorityCell.append(prioritySelect, dueLabel);
+        if (ticket.status !== 'done') {
+          const pauseButton = document.createElement('button');
+          pauseButton.type = 'button';
+          pauseButton.className = 'mt-1 rounded-lg border border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50';
+          pauseButton.textContent = ticket.sla_paused ? 'Resume SLA' : 'Pause · waiting';
+          pauseButton.title = ticket.sla_paused ? 'Resume response target countdown' : 'Pause while waiting for the requester';
+          pauseButton.addEventListener('click', () => toggleTicketSLA(ticket, pauseButton));
+          priorityCell.append(pauseButton);
+        }
         const statusCell = document.createElement('td');
         statusCell.className = 'px-4 py-3';
         const done = ticket.status === 'done';
@@ -312,38 +335,55 @@
         } else {
           assigneeCell.append(assignment);
         }
-        row.append(ticketCell, employeeCell, cell(employee.Department), problemCell, priorityCell, assigneeCell, cell(date), statusCell, actionCell);
+        row.append(ticketCell, employeeCell, cell(employee.Department), problemCell, assetCell, priorityCell, assigneeCell, cell(date), statusCell, actionCell);
         rows.append(row);
       }
       $('emptyState').classList.toggle('hidden', visible.length !== 0);
       const dateScope = dayFilter.value ? ` · ${dayFilter.value} তারিখের` : ' · সব তারিখ';
-      $('listSummary').textContent = number(visible.length) + 'টি দেখানো হচ্ছে' + dateScope + (tickets.length >= 500 ? ' (সর্বোচ্চ ৫০০)' : '');
+      const first = ticketTotal === 0 ? 0 : ticketPage * pageSize + 1;
+      const last = Math.min(ticketPage * pageSize + visible.length, ticketTotal);
+      $('listSummary').textContent = `${number(first)}–${number(last)} / ${number(ticketTotal)} tickets${dateScope}`;
+      $('ticketPageSummary').textContent = `Page ${number(ticketPage + 1)} of ${number(Math.max(1, Math.ceil(ticketTotal / pageSize)))}`;
+      $('ticketPrevPage').disabled = ticketPage === 0;
+      $('ticketNextPage').disabled = (ticketPage + 1) * pageSize >= ticketTotal;
     }
 
     async function loadTickets() {
       const sequence = ++requestSequence;
       refresh.disabled = true;
       refresh.textContent = 'লোড হচ্ছে…';
+      $('ticketPrevPage').disabled = true;
+      $('ticketNextPage').disabled = true;
       $('errorBox').classList.add('hidden');
       try {
-        const [all, pending, inProgress, done] = await Promise.all([
-          getJSON('/api/tickets?limit=500' + ticketDayQuery()),
+        const pageParams = new URLSearchParams({ limit: String(pageSize), offset: String(ticketPage * pageSize) });
+        if (filter.value) pageParams.set('status', filter.value);
+        if (search.value.trim()) pageParams.set('q', search.value.trim());
+        const [all, pending, inProgress, done, page] = await Promise.all([
+          getJSON('/api/tickets?limit=1' + ticketDayQuery()),
           getJSON('/api/tickets?status=pending&limit=500' + ticketDayQuery()),
           getJSON('/api/tickets?status=in_progress&limit=500' + ticketDayQuery()),
-          getJSON('/api/tickets?status=done&limit=500' + ticketDayQuery()),
+          getJSON('/api/tickets?status=done&limit=1' + ticketDayQuery()),
+          getJSON('/api/tickets?' + pageParams.toString() + ticketDayQuery()),
         ]);
         if (sequence !== requestSequence) return;
-        const failure = [all, pending, inProgress, done].find((result) => !result.ok);
+        const failure = [all, pending, inProgress, done, page].find((result) => !result.ok);
         if (failure) {
           $('errorBox').textContent = failure.status === 401
             ? 'Admin panel দেখতে login করুন।'
             : (failure.data.error || 'টিকিট তালিকা আনা যায়নি।');
           $('errorBox').classList.remove('hidden');
-          tickets = [];
+          tickets = []; ticketTotal = 0;
           render();
           return;
         }
-        tickets = Array.isArray(all.data.tickets) ? all.data.tickets : [];
+        const pageTotal = Number(page.data.total) || 0;
+        if (ticketPage > 0 && ticketPage * pageSize >= pageTotal) {
+          ticketPage = Math.max(0, Math.ceil(pageTotal / pageSize) - 1);
+          return loadTickets();
+        }
+        tickets = Array.isArray(page.data.tickets) ? page.data.tickets : [];
+        ticketTotal = pageTotal;
         const pendingTickets = Array.isArray(pending.data.tickets) ? pending.data.tickets : [];
         const inProgressTickets = Array.isArray(inProgress.data.tickets) ? inProgress.data.tickets : [];
         $('totalCount').textContent = number(all.data.total ?? tickets.length);
@@ -458,6 +498,22 @@
       }
     }
 
+    async function toggleTicketSLA(ticket, button) {
+      button.disabled = true;
+      try {
+        const result = await getJSON('/api/tickets/' + encodeURIComponent(ticket.id) + '/sla', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paused: !ticket.sla_paused })
+        });
+        if (!result.ok) throw new Error(result.data.error || 'SLA timer update failed.');
+        await loadTickets();
+      } catch (error) {
+        button.disabled = false;
+        $('errorBox').textContent = error.message;
+        $('errorBox').classList.remove('hidden');
+      }
+    }
+
     async function saveTicketStatus(ticket, select) {
       const selected = select.value;
       select.disabled = true;
@@ -477,14 +533,19 @@
       }
     }
 
-    filter.addEventListener('change', render);
-    search.addEventListener('input', render);
+    filter.addEventListener('change', () => { ticketPage = 0; loadTickets(); });
+    search.addEventListener('input', () => {
+      clearTimeout(ticketSearchTimer);
+      ticketSearchTimer = setTimeout(() => { ticketPage = 0; loadTickets(); }, 250);
+    });
     dayFilter.addEventListener('change', () => {
+      ticketPage = 0;
       dateScopeToggle.textContent = dayFilter.value ? 'All dates' : 'Today';
       dateScopeToggle.setAttribute('aria-label', dayFilter.value ? 'Show tickets from all dates' : 'Show today tickets only');
       loadTickets();
     });
     dateScopeToggle.addEventListener('click', () => {
+      ticketPage = 0;
       if (dayFilter.value) {
         dayFilter.value = '';
         dateScopeToggle.textContent = 'Today';
@@ -498,6 +559,8 @@
     });
     refresh.addEventListener('click', loadTickets);
     exportButton.addEventListener('click', exportTicketsCSV);
+    $('ticketPrevPage').addEventListener('click', () => { if (ticketPage > 0) { ticketPage--; loadTickets(); } });
+    $('ticketNextPage').addEventListener('click', () => { if ((ticketPage + 1) * pageSize < ticketTotal) { ticketPage++; loadTickets(); } });
     dayFilter.value = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
     dateScopeToggle.textContent = 'All dates';
     dateScopeToggle.setAttribute('aria-label', 'Show tickets from all dates');

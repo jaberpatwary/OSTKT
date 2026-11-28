@@ -1,0 +1,7 @@
+FROM postgres:16-alpine
+
+RUN mkdir -p /backups /attachments /scripts \
+    && chown -R 10001:10001 /backups
+COPY --chown=10001:10001 scripts/backup.sh scripts/restore.sh /scripts/
+USER 10001:10001
+ENTRYPOINT ["/bin/sh", "/scripts/backup.sh"]

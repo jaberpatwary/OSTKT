@@ -88,7 +88,7 @@ func (r *TaskRepository) List(ctx context.Context, filter domain.TaskFilter) ([]
 		limit = 100
 	}
 	records := make([]taskRecord, 0)
-	if err := query.Order("CASE WHEN status = 'done' THEN 1 ELSE 0 END, due_date = '', due_date ASC, created_at DESC, id DESC").Limit(limit).Find(&records).Error; err != nil {
+	if err := query.Order("CASE WHEN status = 'done' THEN 1 ELSE 0 END, due_date = '', due_date ASC, created_at DESC, id DESC").Limit(limit).Offset(filter.Offset).Find(&records).Error; err != nil {
 		return nil, 0, err
 	}
 	tasks := make([]domain.Task, 0, len(records))

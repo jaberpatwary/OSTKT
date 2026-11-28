@@ -33,8 +33,16 @@ services:
       EXCEL_PATH: /data/employees.xlsx
       ATTACHMENT_DIR: /data/attachments
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Dhaka}
+      SLA_BUSINESS_HOURS: ${SLA_BUSINESS_HOURS:-false}
+      SLA_BUSINESS_START: ${SLA_BUSINESS_START:-09:00}
+      SLA_BUSINESS_END: ${SLA_BUSINESS_END:-17:00}
+      SLA_BUSINESS_DAYS: ${SLA_BUSINESS_DAYS:-Mon,Tue,Wed,Thu,Fri}
+      SLA_HOLIDAYS: ${SLA_HOLIDAYS:-}
       APP_USER: ${APP_USER:?Set APP_USER in .env}
       APP_PASS: ${APP_PASS:?Set APP_PASS in .env}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
+      EMAIL_WEBHOOK_SECRET: ${EMAIL_WEBHOOK_SECRET:-}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-20b}
       SMTP_HOST: ${SMTP_HOST:-}
@@ -54,6 +62,49 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  backup:
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
+    image: auto-ticket-system-backup:local
+    container_name: auto-ticket-system-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: ticketdb
+      PGUSER: ticket_app
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+    volumes:
+      - ticket-attachments:/attachments:ro
+      - ticket-backups:/backups
+
+  restore:
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
+    image: auto-ticket-system-backup:local
+    profiles: ["restore"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: ticketdb
+      PGUSER: ticket_app
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      CONFIRM_RESTORE: ${CONFIRM_RESTORE:-}
+    volumes:
+      - ticket-attachments:/attachments
+      - ticket-backups:/backups
+    entrypoint: ["/bin/sh", "/scripts/restore.sh"]
 
   jenkins:
     build:
@@ -80,4 +131,5 @@ services:
 volumes:
   ticket-postgres-data:
   ticket-attachments:
+  ticket-backups:
   jenkins-home:

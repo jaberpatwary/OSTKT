@@ -2,7 +2,20 @@ package usecase
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base32"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -25,13 +38,30 @@ var (
 	ErrWeakPassword       = errors.New("password must be at least 12 characters and at most 72 bytes")
 	ErrLastAdmin          = domain.ErrLastAdmin
 	ErrUsernameTaken      = domain.ErrDuplicateKey
+	ErrInvalidSession     = errors.New("invalid or expired session")
+	ErrMFAUnavailable     = errors.New("MFA encryption is not configured")
+	ErrMFAAlreadyEnabled  = errors.New("MFA is already enabled")
+	ErrMFAInvalidCode     = errors.New("authenticator code is invalid")
 	usernamePattern       = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._@+-]{2,63}$`)
 )
 
-type SecurityService struct{ repository domain.SecurityRepository }
+type SecurityService struct {
+	repository domain.SecurityRepository
+	mfaKey     []byte
+}
 
-func NewSecurityService(repository domain.SecurityRepository) *SecurityService {
-	return &SecurityService{repository: repository}
+func NewSecurityService(repository domain.SecurityRepository, encryptionKeys ...string) *SecurityService {
+	service := &SecurityService{repository: repository}
+	if len(encryptionKeys) > 0 && strings.TrimSpace(encryptionKeys[0]) != "" {
+		key, err := base64.RawStdEncoding.DecodeString(strings.TrimSpace(encryptionKeys[0]))
+		if err != nil {
+			key, err = base64.StdEncoding.DecodeString(strings.TrimSpace(encryptionKeys[0]))
+		}
+		if err == nil && len(key) == 32 {
+			service.mfaKey = key
+		}
+	}
+	return service
 }
 
 func (s *SecurityService) BootstrapAdmin(ctx context.Context, username, password string) error {
@@ -63,6 +93,230 @@ func (s *SecurityService) Authenticate(ctx context.Context, username, password s
 		return domain.User{}, ErrInvalidCredentials
 	}
 	return user, nil
+}
+
+func (s *SecurityService) CreateSession(ctx context.Context, username, password, otp string) (domain.SessionCredentials, error) {
+	user, err := s.Authenticate(ctx, username, password)
+	if err != nil {
+		return domain.SessionCredentials{}, err
+	}
+	secretCiphertext, mfaEnabled, err := s.repository.GetMFA(ctx, user.ID)
+	if err != nil {
+		return domain.SessionCredentials{}, err
+	}
+	if mfaEnabled {
+		secret, err := s.decryptMFASecret(secretCiphertext)
+		if err != nil || !verifyTOTP(secret, otp, time.Now().UTC()) {
+			return domain.SessionCredentials{}, ErrInvalidCredentials
+		}
+	}
+	if err := s.repository.DeleteExpiredSessions(ctx, time.Now().UTC()); err != nil {
+		return domain.SessionCredentials{}, err
+	}
+	token, err := randomSessionToken()
+	if err != nil {
+		return domain.SessionCredentials{}, err
+	}
+	csrf, err := randomSessionToken()
+	if err != nil {
+		return domain.SessionCredentials{}, err
+	}
+	expiresAt := time.Now().UTC().Add(12 * time.Hour)
+	if err := s.repository.CreateSession(ctx, domain.LoginSession{
+		UserID: user.ID, TokenHash: hashSessionToken(token), CSRFHash: hashSessionToken(csrf), ExpiresAt: expiresAt,
+	}); err != nil {
+		return domain.SessionCredentials{}, err
+	}
+	return domain.SessionCredentials{Token: token, CSRFToken: csrf, ExpiresAt: expiresAt, User: user}, nil
+}
+
+func (s *SecurityService) MFAStatus(ctx context.Context, userID uint) (bool, error) {
+	_, enabled, err := s.repository.GetMFA(ctx, userID)
+	return enabled, err
+}
+
+func (s *SecurityService) BeginMFASetup(ctx context.Context, user domain.User) (string, string, error) {
+	if len(s.mfaKey) != 32 {
+		return "", "", ErrMFAUnavailable
+	}
+	_, enabled, err := s.repository.GetMFA(ctx, user.ID)
+	if err != nil {
+		return "", "", err
+	}
+	if enabled {
+		return "", "", ErrMFAAlreadyEnabled
+	}
+	secretBytes := make([]byte, 20)
+	if _, err := rand.Read(secretBytes); err != nil {
+		return "", "", err
+	}
+	secret := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(secretBytes)
+	ciphertext, err := s.encryptMFASecret(secret)
+	if err != nil {
+		return "", "", err
+	}
+	if err := s.repository.SetMFA(ctx, user.ID, ciphertext, false); err != nil {
+		return "", "", err
+	}
+	issuer := "Auto Ticket System"
+	label := url.PathEscape(issuer + ":" + user.Username)
+	values := url.Values{"secret": {secret}, "issuer": {issuer}, "algorithm": {"SHA1"}, "digits": {"6"}, "period": {"30"}}
+	return secret, "otpauth://totp/" + label + "?" + values.Encode(), nil
+}
+
+func (s *SecurityService) ConfirmMFASetup(ctx context.Context, user domain.User, code string) error {
+	secretCiphertext, enabled, err := s.repository.GetMFA(ctx, user.ID)
+	if err != nil {
+		return err
+	}
+	if enabled {
+		return ErrMFAAlreadyEnabled
+	}
+	secret, err := s.decryptMFASecret(secretCiphertext)
+	if err != nil || !verifyTOTP(secret, code, time.Now().UTC()) {
+		return ErrMFAInvalidCode
+	}
+	if err := s.repository.SetMFA(ctx, user.ID, secretCiphertext, true); err != nil {
+		return err
+	}
+	return s.repository.DeleteSessionsForUser(ctx, user.ID)
+}
+
+func (s *SecurityService) DisableMFA(ctx context.Context, user domain.User, password, code string) error {
+	verified, err := s.Authenticate(ctx, user.Username, password)
+	if err != nil || verified.ID != user.ID {
+		return ErrInvalidCredentials
+	}
+	secretCiphertext, enabled, err := s.repository.GetMFA(ctx, user.ID)
+	if err != nil {
+		return err
+	}
+	if !enabled {
+		return nil
+	}
+	secret, err := s.decryptMFASecret(secretCiphertext)
+	if err != nil || !verifyTOTP(secret, code, time.Now().UTC()) {
+		return ErrMFAInvalidCode
+	}
+	if err := s.repository.SetMFA(ctx, user.ID, "", false); err != nil {
+		return err
+	}
+	return s.repository.DeleteSessionsForUser(ctx, user.ID)
+}
+
+func (s *SecurityService) encryptMFASecret(secret string) (string, error) {
+	if len(s.mfaKey) != 32 {
+		return "", ErrMFAUnavailable
+	}
+	block, err := aes.NewCipher(s.mfaKey)
+	if err != nil {
+		return "", err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return "", err
+	}
+	ciphertext := gcm.Seal(nonce, nonce, []byte(secret), nil)
+	return base64.RawStdEncoding.EncodeToString(ciphertext), nil
+}
+
+func (s *SecurityService) decryptMFASecret(encoded string) (string, error) {
+	if len(s.mfaKey) != 32 {
+		return "", ErrMFAUnavailable
+	}
+	data, err := base64.RawStdEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", err
+	}
+	block, err := aes.NewCipher(s.mfaKey)
+	if err != nil {
+		return "", err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil || len(data) < gcm.NonceSize() {
+		return "", ErrMFAUnavailable
+	}
+	secret, err := gcm.Open(nil, data[:gcm.NonceSize()], data[gcm.NonceSize():], nil)
+	return string(secret), err
+}
+
+func verifyTOTP(secret, code string, now time.Time) bool {
+	code = strings.TrimSpace(code)
+	if len(code) != 6 {
+		return false
+	}
+	for _, char := range code {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	key, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.ToUpper(strings.TrimSpace(secret)))
+	if err != nil {
+		return false
+	}
+	for skew := int64(-1); skew <= 1; skew++ {
+		counter := uint64(now.Unix()/30 + skew)
+		var message [8]byte
+		binary.BigEndian.PutUint64(message[:], counter)
+		mac := hmac.New(sha1.New, key)
+		_, _ = mac.Write(message[:])
+		digest := mac.Sum(nil)
+		offset := digest[len(digest)-1] & 0x0f
+		value := binary.BigEndian.Uint32(digest[offset:offset+4]) & 0x7fffffff
+		candidate := []byte(fmt.Sprintf("%06d", value%1000000))
+		if subtle.ConstantTimeCompare(candidate, []byte(code)) == 1 {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *SecurityService) AuthenticateSession(ctx context.Context, token, csrf string) (domain.User, error) {
+	if len(token) < 40 || len(token) > 64 || len(csrf) < 40 || len(csrf) > 64 {
+		return domain.User{}, ErrInvalidSession
+	}
+	session, err := s.repository.GetSession(ctx, hashSessionToken(token))
+	if err != nil {
+		return domain.User{}, ErrInvalidSession
+	}
+	if !session.ExpiresAt.After(time.Now().UTC()) {
+		_ = s.repository.DeleteSession(ctx, session.TokenHash)
+		return domain.User{}, ErrInvalidSession
+	}
+	csrfHash := hashSessionToken(csrf)
+	if subtle.ConstantTimeCompare([]byte(csrfHash), []byte(session.CSRFHash)) != 1 {
+		return domain.User{}, ErrInvalidSession
+	}
+	user, err := s.repository.GetUser(ctx, session.UserID)
+	if err != nil || !user.Active {
+		_ = s.repository.DeleteSession(ctx, session.TokenHash)
+		return domain.User{}, ErrInvalidSession
+	}
+	return user, nil
+}
+
+func (s *SecurityService) RevokeSession(ctx context.Context, token string) error {
+	if len(token) < 40 || len(token) > 64 {
+		return ErrInvalidSession
+	}
+	return s.repository.DeleteSession(ctx, hashSessionToken(token))
+}
+
+func randomSessionToken() (string, error) {
+	buffer := make([]byte, 32)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buffer), nil
+}
+
+func hashSessionToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
 }
 
 func (s *SecurityService) ListUsers(ctx context.Context) ([]domain.User, error) {

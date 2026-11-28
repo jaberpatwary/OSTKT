@@ -88,7 +88,7 @@ var emailTmpl = template.Must(template.New("email").Parse(`<!DOCTYPE html>
       </table>
     </td></tr>
     <tr><td style="padding:18px 24px 28px;text-align:center;font-size:12px;line-height:1.7;color:#94a3b8;">
-      এটি একটি স্বয়ংক্রিয় ইমেইল — অনুগ্রহ করে রিপ্লাই করবেন না।<br>Auto Ticket System
+      আরও তথ্য দিতে রিপ্লাই করুন এবং subject-এ ticket number রাখুন।<br>Auto Ticket System
     </td></tr>
   </table>
 </td></tr>
@@ -125,7 +125,7 @@ func renderTicketEmail(t domain.Ticket, loc *time.Location) (htmlBody, textBody 
 	for _, r := range rows {
 		fmt.Fprintf(&txt, "%s: %s\n", r.Label, r.Value)
 	}
-	txt.WriteString("স্ট্যাটাস: সম্পন্ন\n\n— Auto Ticket System")
+	txt.WriteString("স্ট্যাটাস: সম্পন্ন\n\nআরও তথ্য দিতে রিপ্লাই করুন এবং subject-এ ticket number রাখুন।\n— Auto Ticket System")
 	return buf.String(), txt.String(), nil
 }
 

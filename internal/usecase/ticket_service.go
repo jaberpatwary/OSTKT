@@ -26,6 +26,8 @@ var (
 	ErrProblemTooLong  = errors.New("problem description must be 2000 characters or fewer")
 	ErrAssigneeTooLong = errors.New("assignee name must be 100 characters or fewer")
 	ErrInvalidPriority = errors.New("priority must be low, medium, high, or urgent")
+	ErrSLAPaused       = errors.New("resume the SLA before changing ticket priority")
+	ErrAssetTagTooLong = errors.New("asset tag must be 60 characters or fewer")
 )
 
 type EmployeeDirectory interface {
@@ -50,6 +52,7 @@ type CreateTicketInput struct {
 	EmployeeID string
 	Status     string
 	Problem    string
+	AssetTag   string
 	AssignedTo string
 	Priority   string
 }
@@ -65,6 +68,7 @@ type TicketService struct {
 	employees  EmployeeDirectory
 	mailer     Mailer
 	location   *time.Location
+	calendar   *BusinessCalendar
 	emailWG    sync.WaitGroup
 }
 
@@ -74,6 +78,8 @@ func NewTicketService(repository domain.TicketRepository, employees EmployeeDire
 	}
 	return &TicketService{repository: repository, employees: employees, mailer: mailer, location: location}
 }
+
+func (s *TicketService) SetBusinessCalendar(calendar *BusinessCalendar) { s.calendar = calendar }
 
 func (s *TicketService) SearchEmployees(query string, limit int) []domain.Employee {
 	return s.employees.Search(query, limit)
@@ -107,6 +113,10 @@ func (s *TicketService) Create(ctx context.Context, input CreateTicketInput) (do
 		return domain.Ticket{}, false, ErrInvalidPriority
 	}
 	assignee := strings.TrimSpace(input.AssignedTo)
+	assetTag := strings.TrimSpace(input.AssetTag)
+	if len([]rune(assetTag)) > 60 {
+		return domain.Ticket{}, false, ErrAssetTagTooLong
+	}
 	if len([]rune(assignee)) > 100 {
 		return domain.Ticket{}, false, ErrAssigneeTooLong
 	}
@@ -129,9 +139,10 @@ func (s *TicketService) Create(ctx context.Context, input CreateTicketInput) (do
 		EmployeeID:   employee.EmployeeID,
 		Department:   employee.Department,
 		Problem:      problem,
+		AssetTag:     assetTag,
 		AssignedTo:   assignee,
 		Priority:     priority,
-		SLADueAt:     time.Now().UTC().Add(time.Duration(slaHours) * time.Hour),
+		SLADueAt:     s.slaDueAt(time.Now(), slaHours),
 		Email:        employee.Email,
 		Phone:        employee.Phone,
 		Status:       status,
@@ -270,11 +281,14 @@ func (s *TicketService) SetPriority(ctx context.Context, key, priority string) (
 	if err != nil {
 		return domain.Ticket{}, err
 	}
+	if ticket.SLAPausedAt != nil {
+		return domain.Ticket{}, ErrSLAPaused
+	}
 	startedAt := ticket.CreatedAt
 	if startedAt.IsZero() {
 		startedAt = time.Now().UTC()
 	}
-	dueAt := startedAt.UTC().Add(time.Duration(hours) * time.Hour)
+	dueAt := s.slaDueAt(startedAt, hours)
 	updated, err := s.repository.SetPriority(ctx, ticket.ID, priority, dueAt)
 	if err != nil {
 		return domain.Ticket{}, err
@@ -287,7 +301,46 @@ func (s *TicketService) SetPriority(ctx context.Context, key, priority string) (
 	return ticket, nil
 }
 
+func (s *TicketService) SetSLAPaused(ctx context.Context, key string, paused bool) (domain.Ticket, error) {
+	ticket, err := s.repository.GetByKey(ctx, key)
+	if err != nil {
+		return domain.Ticket{}, err
+	}
+	if ticket.Status == domain.StatusDone {
+		return domain.Ticket{}, ErrInvalidStatus
+	}
+	var pausedAt *time.Time
+	dueAt := ticket.SLADueAt
+	now := time.Now().UTC()
+	if paused {
+		if ticket.SLAPausedAt != nil {
+			return ticket, nil
+		}
+		pausedAt = &now
+	} else {
+		if ticket.SLAPausedAt == nil {
+			return ticket, nil
+		}
+		if !dueAt.IsZero() && now.After(*ticket.SLAPausedAt) {
+			dueAt = dueAt.Add(now.Sub(*ticket.SLAPausedAt))
+		}
+	}
+	updated, err := s.repository.SetSLA(ctx, ticket.ID, pausedAt, dueAt)
+	if err != nil {
+		return domain.Ticket{}, err
+	}
+	if !updated {
+		return domain.Ticket{}, domain.ErrNotFound
+	}
+	ticket.SLADueAt, ticket.SLAPausedAt = dueAt, pausedAt
+	return ticket, nil
+}
+
 func (s *TicketService) List(ctx context.Context, status string, from, until time.Time, limit int) ([]domain.Ticket, int64, error) {
+	return s.Page(ctx, status, from, until, "", limit, 0)
+}
+
+func (s *TicketService) Page(ctx context.Context, status string, from, until time.Time, query string, limit, offset int) ([]domain.Ticket, int64, error) {
 	status = strings.ToLower(strings.TrimSpace(status))
 	if status != "" && status != domain.StatusDone && status != domain.StatusPending && status != domain.StatusInProgress {
 		return nil, 0, ErrInvalidFilter
@@ -295,7 +348,14 @@ func (s *TicketService) List(ctx context.Context, status string, from, until tim
 	if limit <= 0 || limit > MaxTicketLimit {
 		limit = 100
 	}
-	return s.repository.List(ctx, domain.TicketFilter{Status: status, CreatedFrom: from, CreatedUntil: until, Limit: limit})
+	query = strings.TrimSpace(query)
+	if len([]rune(query)) > 200 {
+		query = string([]rune(query)[:200])
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return s.repository.List(ctx, domain.TicketFilter{Status: status, CreatedFrom: from, CreatedUntil: until, Query: query, Limit: limit, Offset: offset})
 }
 
 func (s *TicketService) queueEmail(ticket domain.Ticket) bool {
@@ -356,4 +416,11 @@ func (s *TicketService) WaitForEmails(ctx context.Context) {
 	case <-ctx.Done():
 		log.Printf("shutdown deadline reached before email tasks finished")
 	}
+}
+
+func (s *TicketService) slaDueAt(start time.Time, hours int) time.Time {
+	if s.calendar != nil {
+		return s.calendar.DueAt(start, hours)
+	}
+	return start.UTC().Add(time.Duration(hours) * time.Hour)
 }

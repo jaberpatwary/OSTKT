@@ -88,7 +88,7 @@ func (s *NotificationService) Scan(ctx context.Context) error {
 		return err
 	}
 	for _, ticket := range tickets {
-		if strings.EqualFold(strings.TrimSpace(ticket.Status), domain.StatusDone) {
+		if strings.EqualFold(strings.TrimSpace(ticket.Status), domain.StatusDone) || ticket.SLAPausedAt != nil {
 			continue
 		}
 		dueAt := ticket.SLADueAt

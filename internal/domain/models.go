@@ -13,9 +13,10 @@ const (
 )
 
 var (
-	ErrNotFound     = errors.New("record not found")
-	ErrDuplicateKey = errors.New("duplicate key")
-	ErrLastAdmin    = errors.New("cannot deactivate or demote the last active administrator")
+	ErrNotFound          = errors.New("record not found")
+	ErrDuplicateKey      = errors.New("duplicate key")
+	ErrLastAdmin         = errors.New("cannot deactivate or demote the last active administrator")
+	ErrInvalidTransition = errors.New("invalid state transition")
 )
 
 type Employee struct {
@@ -33,9 +34,11 @@ type Ticket struct {
 	EmployeeID   string
 	Department   string
 	Problem      string
+	AssetTag     string
 	AssignedTo   string
 	Priority     string
 	SLADueAt     time.Time
+	SLAPausedAt  *time.Time
 	Email        string
 	Phone        string
 	Status       string
@@ -55,7 +58,9 @@ type TicketFilter struct {
 	Status       string
 	CreatedFrom  time.Time
 	CreatedUntil time.Time
+	Query        string
 	Limit        int
+	Offset       int
 }
 
 type Task struct {
@@ -76,6 +81,7 @@ type TaskFilter struct {
 	Assignee string
 	Query    string
 	Limit    int
+	Offset   int
 }
 
 // User is an internal application account. Password material is deliberately
@@ -86,6 +92,7 @@ type User struct {
 	DisplayName string    `json:"display_name"`
 	Role        string    `json:"role"`
 	Active      bool      `json:"active"`
+	MFAEnabled  bool      `json:"mfa_enabled"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -132,6 +139,7 @@ type TicketRepository interface {
 	SetStatus(ctx context.Context, id uint, status string) (bool, error)
 	SetAssignee(ctx context.Context, id uint, assignee string) (bool, error)
 	SetPriority(ctx context.Context, id uint, priority string, slaDueAt time.Time) (bool, error)
+	SetSLA(ctx context.Context, id uint, pausedAt *time.Time, slaDueAt time.Time) (bool, error)
 	SetEmailSentAt(ctx context.Context, id uint, sentAt time.Time) error
 	List(ctx context.Context, filter TicketFilter) ([]Ticket, int64, error)
 }

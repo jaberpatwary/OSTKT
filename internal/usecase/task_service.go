@@ -103,6 +103,12 @@ func (s *TaskService) List(ctx context.Context, filter domain.TaskFilter) ([]dom
 	}
 	filter.Assignee = strings.TrimSpace(filter.Assignee)
 	filter.Query = strings.TrimSpace(filter.Query)
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+	if filter.Offset > 1000000 {
+		filter.Offset = 1000000
+	}
 	if filter.Limit <= 0 || filter.Limit > MaxTaskLimit {
 		filter.Limit = 100
 	}

@@ -2,7 +2,12 @@ package httpapi
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/csv"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +15,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/mail"
 	"regexp"
 	"sort"
 	"strconv"
@@ -35,8 +41,10 @@ type TicketUseCase interface {
 	SetStatus(ctx context.Context, key, status string) (domain.Ticket, bool, error)
 	Assign(ctx context.Context, key, assignee string) (domain.Ticket, error)
 	SetPriority(ctx context.Context, key, priority string) (domain.Ticket, error)
+	SetSLAPaused(ctx context.Context, key string, paused bool) (domain.Ticket, error)
 	Get(ctx context.Context, key string) (domain.Ticket, error)
 	List(ctx context.Context, status string, from, until time.Time, limit int) ([]domain.Ticket, int64, error)
+	Page(ctx context.Context, status string, from, until time.Time, query string, limit, offset int) ([]domain.Ticket, int64, error)
 }
 
 type TaskUseCase interface {
@@ -47,6 +55,13 @@ type TaskUseCase interface {
 
 type SecurityUseCase interface {
 	Authenticate(ctx context.Context, username, password string) (domain.User, error)
+	CreateSession(ctx context.Context, username, password, otp string) (domain.SessionCredentials, error)
+	AuthenticateSession(ctx context.Context, token, csrf string) (domain.User, error)
+	RevokeSession(ctx context.Context, token string) error
+	MFAStatus(ctx context.Context, userID uint) (bool, error)
+	BeginMFASetup(ctx context.Context, user domain.User) (string, string, error)
+	ConfirmMFASetup(ctx context.Context, user domain.User, code string) error
+	DisableMFA(ctx context.Context, user domain.User, password, code string) error
 	ListUsers(ctx context.Context) ([]domain.User, error)
 	CreateUser(ctx context.Context, input domain.UserInput) (domain.User, error)
 	UpdateUser(ctx context.Context, id uint, input domain.UserUpdate) (domain.User, error)
@@ -71,14 +86,35 @@ type AttachmentUseCase interface {
 	Download(ctx context.Context, workType string, workID, attachmentID uint) (domain.Attachment, io.ReadCloser, error)
 }
 
+type PlatformUseCase interface {
+	Services(ctx context.Context, includeInactive bool) ([]domain.ServiceCatalogItem, error)
+	SaveService(ctx context.Context, item domain.ServiceCatalogItem) (domain.ServiceCatalogItem, error)
+	Articles(ctx context.Context, search string, canSeeDrafts bool) ([]domain.KnowledgeArticle, error)
+	SaveArticle(ctx context.Context, item domain.KnowledgeArticle) (domain.KnowledgeArticle, error)
+	Assets(ctx context.Context, search string) ([]domain.Asset, error)
+	SaveAsset(ctx context.Context, item domain.Asset) (domain.Asset, error)
+	Changes(ctx context.Context, status string) ([]domain.ChangeRequest, error)
+	SaveChange(ctx context.Context, item domain.ChangeRequest, creating bool) (domain.ChangeRequest, error)
+	SetChangeStatus(ctx context.Context, id uint, status string) (domain.ChangeRequest, error)
+	Incidents(ctx context.Context, recordType, status string) ([]domain.IncidentRecord, error)
+	SaveIncident(ctx context.Context, item domain.IncidentRecord, creating bool) (domain.IncidentRecord, error)
+	SetIncidentStatus(ctx context.Context, id uint, status string) (domain.IncidentRecord, error)
+	ClaimInboundEmail(ctx context.Context, messageID string) (bool, error)
+	InboundEmailStatus(ctx context.Context, messageID string) (string, bool, error)
+	CompleteInboundEmail(ctx context.Context, messageID, ticketNumber string) error
+	ReleaseInboundEmail(ctx context.Context, messageID string) error
+}
+
 type ticketView struct {
 	ID           uint            `json:"id"`
 	TicketNumber string          `json:"ticket_number"`
 	Employee     domain.Employee `json:"employee"`
 	Problem      string          `json:"problem"`
+	AssetTag     string          `json:"asset_tag"`
 	AssignedTo   string          `json:"assigned_to"`
 	Priority     string          `json:"priority"`
 	SLADueAt     time.Time       `json:"sla_due_at"`
+	SLAPaused    bool            `json:"sla_paused"`
 	Status       string          `json:"status"`
 	EmailQueued  bool            `json:"email_queued"`
 	EmailSentAt  *time.Time      `json:"email_sent_at"`
@@ -113,23 +149,28 @@ func toTaskView(task domain.Task) taskView {
 func toView(ticket domain.Ticket, emailQueued bool) ticketView {
 	return ticketView{
 		ID: ticket.ID, TicketNumber: ticket.TicketNumber, Employee: ticket.Employee(),
-		Status: ticket.Status, Problem: ticket.Problem, AssignedTo: ticket.AssignedTo,
-		Priority: ticket.Priority, SLADueAt: ticket.SLADueAt,
+		Status: ticket.Status, Problem: ticket.Problem, AssetTag: ticket.AssetTag, AssignedTo: ticket.AssignedTo,
+		Priority: ticket.Priority, SLADueAt: ticket.SLADueAt, SLAPaused: ticket.SLAPausedAt != nil,
 		EmailQueued: emailQueued, EmailSentAt: ticket.EmailSentAt,
 		CreatedAt: ticket.CreatedAt,
 	}
 }
 
 type Handler struct {
-	tickets        TicketUseCase
-	tasks          TaskUseCase
-	security       SecurityUseCase
-	notifications  NotificationUseCase
-	activities     ActivityUseCase
-	attachments    AttachmentUseCase
-	assistant      *groqapi.Client
-	assistantMu    sync.Mutex
-	assistantRates map[string]assistantRateEntry
+	tickets             TicketUseCase
+	tasks               TaskUseCase
+	security            SecurityUseCase
+	notifications       NotificationUseCase
+	activities          ActivityUseCase
+	attachments         AttachmentUseCase
+	platform            PlatformUseCase
+	emailWebhookSecret  string
+	sessionCookieSecure bool
+	loginMu             sync.Mutex
+	loginFailures       map[string]loginRateEntry
+	assistant           *groqapi.Client
+	assistantMu         sync.Mutex
+	assistantRates      map[string]assistantRateEntry
 }
 
 type assistantRateEntry struct {
@@ -137,8 +178,14 @@ type assistantRateEntry struct {
 	count  int
 }
 
+type loginRateEntry struct {
+	window time.Time
+	count  int
+}
+
 var assistantGluedAssign = regexp.MustCompile(`(?i)\bassing([[:alpha:]])`)
 var assistantMisspelledAssign = regexp.MustCompile(`(?i)\bassing\b`)
+var inboundTicketReference = regexp.MustCompile(`(?i)\bTKT-\d{6}\b`)
 
 func normalizeAssistantBanglish(text string) string {
 	text = assistantGluedAssign.ReplaceAllString(text, "assign $1")
@@ -165,11 +212,11 @@ func NewRouterWithActivity(tickets TicketUseCase, healthCheck func(context.Conte
 	return newRouter(tickets, healthCheck, cfg, tasks, security, notifications, activities, nil)
 }
 
-func NewRouterWithAttachments(tickets TicketUseCase, healthCheck func(context.Context) error, cfg config.Config, tasks TaskUseCase, security SecurityUseCase, notifications NotificationUseCase, activities ActivityUseCase, attachments AttachmentUseCase) *gin.Engine {
-	return newRouter(tickets, healthCheck, cfg, tasks, security, notifications, activities, attachments)
+func NewRouterWithAttachments(tickets TicketUseCase, healthCheck func(context.Context) error, cfg config.Config, tasks TaskUseCase, security SecurityUseCase, notifications NotificationUseCase, activities ActivityUseCase, attachments AttachmentUseCase, platformServices ...PlatformUseCase) *gin.Engine {
+	return newRouter(tickets, healthCheck, cfg, tasks, security, notifications, activities, attachments, platformServices...)
 }
 
-func newRouter(tickets TicketUseCase, healthCheck func(context.Context) error, cfg config.Config, tasks TaskUseCase, security SecurityUseCase, notifications NotificationUseCase, activities ActivityUseCase, attachments AttachmentUseCase) *gin.Engine {
+func newRouter(tickets TicketUseCase, healthCheck func(context.Context) error, cfg config.Config, tasks TaskUseCase, security SecurityUseCase, notifications NotificationUseCase, activities ActivityUseCase, attachments AttachmentUseCase, platformServices ...PlatformUseCase) *gin.Engine {
 	if cfg.GinMode != "" {
 		gin.SetMode(cfg.GinMode)
 	}
@@ -185,18 +232,26 @@ func newRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 		c.JSON(http.StatusOK, gin.H{"ok": true, "database": "connected"})
 	})
 
-	handler := &Handler{tickets: tickets, tasks: tasks, security: security, notifications: notifications, activities: activities, attachments: attachments, assistant: groqapi.NewClient(cfg.GroqAPIKey, cfg.GroqModel), assistantRates: make(map[string]assistantRateEntry)}
+	var platform PlatformUseCase
+	if len(platformServices) > 0 {
+		platform = platformServices[0]
+	}
+	handler := &Handler{tickets: tickets, tasks: tasks, security: security, notifications: notifications, activities: activities, attachments: attachments, platform: platform, emailWebhookSecret: cfg.EmailWebhookSecret, sessionCookieSecure: cfg.SessionCookieSecure, assistant: groqapi.NewClient(cfg.GroqAPIKey, cfg.GroqModel), assistantRates: make(map[string]assistantRateEntry), loginFailures: make(map[string]loginRateEntry)}
+	router.POST("/integrations/email/inbound", handler.inboundEmail)
 	site := router.Group("/")
 	if security != nil {
-		site.Use(handler.authenticate())
-		log.Println("Database-backed authentication enabled")
+		site.Use(handler.sessionAuthentication())
+		site.GET("/login", func(c *gin.Context) { c.File("./static/login.html") })
+		site.GET("/account/security", func(c *gin.Context) { c.File("./static/account-security.html") })
+		site.POST("/api/auth/login", handler.login)
+		log.Println("Database-backed cookie session authentication enabled")
 	} else if cfg.AppUser != "" && cfg.AppPassword != "" {
 		site.Use(gin.BasicAuth(gin.Accounts{cfg.AppUser: cfg.AppPassword}))
 		log.Println("🔒 Basic Auth enabled")
 	}
 	site.Use(func(c *gin.Context) {
 		path := c.Request.URL.Path
-		if path == "/" || path == "/dashboard" || path == "/admin" || path == "/admin/tasks" || path == "/admin/users" || path == "/admin/audit" {
+		if path == "/" || path == "/dashboard" || path == "/workspace" || path == "/login" || path == "/account/security" || path == "/admin" || path == "/admin/tasks" || path == "/admin/users" || path == "/admin/audit" {
 			c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
 			c.Header("Pragma", "no-cache")
 		}
@@ -204,6 +259,7 @@ func newRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 	})
 	site.StaticFile("/", "./static/index.html")
 	site.StaticFile("/dashboard", "./static/index.html")
+	site.StaticFile("/workspace", "./static/operations.html")
 	site.StaticFile("/admin", "./static/admin.html")
 	site.StaticFile("/admin/tasks", "./static/admin-tasks.html")
 	site.GET("/admin/users", handler.requireRoles("admin"), func(c *gin.Context) { c.File("./static/admin-users.html") })
@@ -220,6 +276,11 @@ func newRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 		api.Use(handler.requireRoles("admin", "manager", "agent"))
 		api.Use(handler.auditWrites())
 		api.GET("/auth/me", handler.currentUser)
+		api.POST("/auth/logout", handler.logout)
+		api.GET("/auth/mfa", handler.mfaStatus)
+		api.POST("/auth/mfa/setup", handler.beginMFASetup)
+		api.POST("/auth/mfa/confirm", handler.confirmMFASetup)
+		api.POST("/auth/mfa/disable", handler.disableMFA)
 		api.GET("/admin/users", handler.requireRoles("admin"), handler.listUsers)
 		api.POST("/admin/users", handler.requireRoles("admin"), handler.createUser)
 		api.PUT("/admin/users/:id", handler.requireRoles("admin"), handler.updateUser)
@@ -252,10 +313,41 @@ func newRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 	api.PATCH("/tickets/:id/status", handler.setTicketStatus)
 	api.PUT("/tickets/:id/assignee", handler.assignTicket)
 	api.PATCH("/tickets/:id/priority", handler.setTicketPriority)
+	api.PATCH("/tickets/:id/sla", handler.setTicketSLAPause)
 	api.GET("/tasks", handler.listTasks)
 	api.GET("/tasks/export.csv", handler.exportTasksCSV)
 	api.POST("/tasks", handler.createTask)
 	api.PATCH("/tasks/:id", handler.updateTask)
+	if platform != nil {
+		api.GET("/platform/services", handler.listServices)
+		api.GET("/platform/knowledge", handler.listKnowledge)
+		api.GET("/platform/assets", handler.listAssets)
+		api.GET("/platform/changes", handler.listChanges)
+		api.GET("/platform/incidents", handler.listIncidents)
+		if security != nil {
+			api.POST("/platform/services", handler.requireRoles("admin", "manager"), handler.saveService)
+			api.PUT("/platform/services/:id", handler.requireRoles("admin", "manager"), handler.saveService)
+			api.POST("/platform/knowledge", handler.requireRoles("admin", "manager"), handler.saveKnowledge)
+			api.PUT("/platform/knowledge/:id", handler.requireRoles("admin", "manager"), handler.saveKnowledge)
+			api.POST("/platform/assets", handler.requireRoles("admin", "manager"), handler.saveAsset)
+			api.PUT("/platform/assets/:id", handler.requireRoles("admin", "manager"), handler.saveAsset)
+			api.POST("/platform/changes", handler.saveChange)
+			api.PATCH("/platform/changes/:id/status", handler.requireRoles("admin", "manager"), handler.updateChangeStatus)
+			api.POST("/platform/incidents", handler.saveIncident)
+			api.PATCH("/platform/incidents/:id/status", handler.requireRoles("admin", "manager"), handler.updateIncidentStatus)
+		} else {
+			api.POST("/platform/services", handler.saveService)
+			api.PUT("/platform/services/:id", handler.saveService)
+			api.POST("/platform/knowledge", handler.saveKnowledge)
+			api.PUT("/platform/knowledge/:id", handler.saveKnowledge)
+			api.POST("/platform/assets", handler.saveAsset)
+			api.PUT("/platform/assets/:id", handler.saveAsset)
+			api.POST("/platform/changes", handler.saveChange)
+			api.PATCH("/platform/changes/:id/status", handler.updateChangeStatus)
+			api.POST("/platform/incidents", handler.saveIncident)
+			api.PATCH("/platform/incidents/:id/status", handler.updateIncidentStatus)
+		}
+	}
 
 	router.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "page not found"})
@@ -263,7 +355,417 @@ func newRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 	return router
 }
 
+type inboundEmailRequest struct {
+	MessageID string `json:"message_id"`
+	From      string `json:"from"`
+	Subject   string `json:"subject"`
+	Text      string `json:"text"`
+}
+
+// inboundEmail accepts a small provider-neutral JSON envelope. The upstream
+// mail provider should sign: unix_timestamp + "." + raw_request_body using HMAC-SHA256.
+func (h *Handler) inboundEmail(c *gin.Context) {
+	if len(h.emailWebhookSecret) < 32 || h.platform == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "email integration is not configured"})
+		return
+	}
+	timestamp := strings.TrimSpace(c.GetHeader("X-Email-Timestamp"))
+	body, err := io.ReadAll(io.LimitReader(c.Request.Body, (1<<20)+1))
+	if err != nil || len(body) > 1<<20 {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "email payload is too large"})
+		return
+	}
+	if !verifyEmailWebhookSignature(h.emailWebhookSecret, timestamp, c.GetHeader("X-Email-Signature"), body, time.Now()) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired email signature"})
+		return
+	}
+	var message inboundEmailRequest
+	if err := json.Unmarshal(body, &message); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid email payload"})
+		return
+	}
+	message.MessageID = strings.TrimSpace(strings.Trim(message.MessageID, "<>"))
+	message.Subject = strings.TrimSpace(message.Subject)
+	message.Text = strings.TrimSpace(message.Text)
+	if message.MessageID == "" || message.From == "" || (message.Subject == "" && message.Text == "") || len([]rune(message.Text)) > 30000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "message_id, from, and email content are required"})
+		return
+	}
+	address, err := mail.ParseAddress(message.From)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "from must contain a valid email address"})
+		return
+	}
+	var employee *domain.Employee
+	for _, candidate := range h.tickets.ListEmployees() {
+		if strings.EqualFold(strings.TrimSpace(candidate.Email), address.Address) {
+			if employee != nil && employee.EmployeeID != candidate.EmployeeID {
+				c.JSON(http.StatusConflict, gin.H{"error": "sender email matches more than one employee"})
+				return
+			}
+			match := candidate
+			employee = &match
+		}
+	}
+	if employee == nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "sender email is not in the employee directory"})
+		return
+	}
+	threadNumber := strings.ToUpper(inboundTicketReference.FindString(message.Subject))
+	var threadTicket domain.Ticket
+	if threadNumber != "" {
+		threadTicket, err = h.tickets.Get(c.Request.Context(), threadNumber)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "ticket reference in email subject was not found"})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load referenced ticket"})
+			}
+			return
+		}
+		if !strings.EqualFold(strings.TrimSpace(threadTicket.Email), address.Address) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "sender does not match the requester for this ticket"})
+			return
+		}
+		if h.activities == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ticket reply threading is not available"})
+			return
+		}
+	}
+	if !h.claimInboundEmail(c, message.MessageID) {
+		return
+	}
+	if threadNumber != "" {
+		reply := strings.Join(nonEmptyParts(message.Subject, message.Text), "\n\n")
+		if len([]rune(reply)) > 2000 {
+			reply = string([]rune(reply)[:2000])
+		}
+		actor := domain.User{DisplayName: employee.Name, Role: "email"}
+		if _, err := h.activities.Record(c.Request.Context(), actor, "ticket", threadTicket.ID, "comment", reply); err != nil {
+			_ = h.platform.ReleaseInboundEmail(c.Request.Context(), message.MessageID)
+			log.Printf("email reply history insert failed for %s: %v", threadNumber, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not attach reply to ticket"})
+			return
+		}
+		if err := h.platform.CompleteInboundEmail(c.Request.Context(), message.MessageID, threadTicket.TicketNumber); err != nil {
+			log.Printf("email reply receipt finalization failed for %s: %v", threadNumber, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "reply was saved but receipt could not be finalized"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true, "reply": true, "ticket_number": threadTicket.TicketNumber})
+		return
+	}
+	problem := strings.Join(nonEmptyParts(message.Subject, message.Text), "\n\n")
+	if len([]rune(problem)) > 2000 {
+		problem = string([]rune(problem)[:2000])
+	}
+	ticket, _, err := h.tickets.Create(c.Request.Context(), usecase.CreateTicketInput{Name: employee.Name, EmployeeID: employee.EmployeeID, Status: domain.StatusPending, Problem: problem})
+	if err != nil {
+		_ = h.platform.ReleaseInboundEmail(c.Request.Context(), message.MessageID)
+		log.Printf("email integration ticket creation failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create ticket from email"})
+		return
+	}
+	if err := h.platform.CompleteInboundEmail(c.Request.Context(), message.MessageID, ticket.TicketNumber); err != nil {
+		log.Printf("email integration event completion failed for %s: %v", ticket.TicketNumber, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ticket was created but email receipt could not be finalized"})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"ok": true, "duplicate": false, "ticket": toView(ticket, false)})
+}
+
+func (h *Handler) claimInboundEmail(c *gin.Context, messageID string) bool {
+	claimed, err := h.platform.ClaimInboundEmail(c.Request.Context(), messageID)
+	if err != nil {
+		log.Printf("email integration claim failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not accept email message"})
+		return false
+	}
+	if !claimed {
+		ticketNumber, completed, statusErr := h.platform.InboundEmailStatus(c.Request.Context(), messageID)
+		if statusErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not check email delivery state"})
+			return false
+		}
+		if !completed {
+			c.Header("Retry-After", "60")
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "message is being processed; retry later"})
+			return false
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true, "duplicate": true, "ticket_number": ticketNumber})
+		return false
+	}
+	return true
+}
+
+func verifyEmailWebhookSignature(secret, timestamp, supplied string, body []byte, now time.Time) bool {
+	if len(secret) < 32 {
+		return false
+	}
+	unix, err := strconv.ParseInt(strings.TrimSpace(timestamp), 10, 64)
+	if err != nil {
+		return false
+	}
+	signedAt := time.Unix(unix, 0)
+	if now.Sub(signedAt) > 5*time.Minute || signedAt.Sub(now) > 5*time.Minute {
+		return false
+	}
+	supplied = strings.TrimPrefix(strings.TrimSpace(supplied), "sha256=")
+	signature, err := hex.DecodeString(supplied)
+	if err != nil {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(strings.TrimSpace(timestamp) + "."))
+	_, _ = mac.Write(body)
+	return hmac.Equal(signature, mac.Sum(nil))
+}
+
+func nonEmptyParts(values ...string) []string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			parts = append(parts, value)
+		}
+	}
+	return parts
+}
+
+func (h *Handler) listServices(c *gin.Context) {
+	items, err := h.platform.Services(c.Request.Context(), isPlatformManager(c))
+	if err != nil {
+		platformFailure(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"services": items})
+}
+
+func (h *Handler) saveService(c *gin.Context) {
+	var item domain.ServiceCatalogItem
+	if !bindPlatformJSON(c, &item) {
+		return
+	}
+	if c.Request.Method == http.MethodPost {
+		item.ID = 0
+	} else if !pathID(c, &item.ID) {
+		return
+	}
+	saved, err := h.platform.SaveService(c.Request.Context(), item)
+	if err != nil {
+		platformFailure(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"service": saved})
+}
+
+func (h *Handler) listKnowledge(c *gin.Context) {
+	items, err := h.platform.Articles(c.Request.Context(), c.Query("q"), isPlatformManager(c))
+	if err != nil {
+		platformFailure(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"articles": items})
+}
+
+func (h *Handler) saveKnowledge(c *gin.Context) {
+	var item domain.KnowledgeArticle
+	if !bindPlatformJSON(c, &item) {
+		return
+	}
+	if c.Request.Method == http.MethodPost {
+		item.ID = 0
+	} else if !pathID(c, &item.ID) {
+		return
+	}
+	saved, err := h.platform.SaveArticle(c.Request.Context(), item)
+	if err != nil {
+		platformFailure(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"article": saved})
+}
+
+func (h *Handler) listAssets(c *gin.Context) {
+	items, err := h.platform.Assets(c.Request.Context(), c.Query("q"))
+	if err != nil {
+		platformFailure(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"assets": items})
+}
+
+func (h *Handler) saveAsset(c *gin.Context) {
+	var item domain.Asset
+	if !bindPlatformJSON(c, &item) {
+		return
+	}
+	if c.Request.Method == http.MethodPost {
+		item.ID = 0
+	} else if !pathID(c, &item.ID) {
+		return
+	}
+	saved, err := h.platform.SaveAsset(c.Request.Context(), item)
+	if err != nil {
+		platformFailure(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"asset": saved})
+}
+
+func (h *Handler) listChanges(c *gin.Context) {
+	items, err := h.platform.Changes(c.Request.Context(), c.Query("status"))
+	if err != nil {
+		platformFailure(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"changes": items})
+}
+
+func (h *Handler) saveChange(c *gin.Context) {
+	var item domain.ChangeRequest
+	if !bindPlatformJSON(c, &item) {
+		return
+	}
+	user, ok := c.Get(authenticatedUserKey)
+	if creator, valid := user.(domain.User); ok && valid && strings.TrimSpace(item.RequestedBy) == "" {
+		item.RequestedBy = creator.DisplayName
+	}
+	item.ID = 0
+	saved, err := h.platform.SaveChange(c.Request.Context(), item, true)
+	if err != nil {
+		platformFailure(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"change": saved})
+}
+
+func (h *Handler) updateChangeStatus(c *gin.Context) {
+	var payload struct {
+		Status string `json:"status"`
+	}
+	if !bindPlatformJSON(c, &payload) {
+		return
+	}
+	id, ok := parsePathID(c)
+	if !ok {
+		return
+	}
+	updated, err := h.platform.SetChangeStatus(c.Request.Context(), id, payload.Status)
+	if err != nil {
+		platformFailure(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"change": updated})
+}
+
+func (h *Handler) listIncidents(c *gin.Context) {
+	items, err := h.platform.Incidents(c.Request.Context(), c.Query("type"), c.Query("status"))
+	if err != nil {
+		platformFailure(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"records": items})
+}
+
+func (h *Handler) saveIncident(c *gin.Context) {
+	var item domain.IncidentRecord
+	if !bindPlatformJSON(c, &item) {
+		return
+	}
+	item.ID = 0
+	if user, ok := c.Get(authenticatedUserKey); ok {
+		if creator, valid := user.(domain.User); valid && strings.TrimSpace(item.Owner) == "" {
+			item.Owner = creator.DisplayName
+		}
+	}
+	saved, err := h.platform.SaveIncident(c.Request.Context(), item, true)
+	if err != nil {
+		platformFailure(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"record": saved})
+}
+
+func (h *Handler) updateIncidentStatus(c *gin.Context) {
+	var payload struct {
+		Status string `json:"status"`
+	}
+	if !bindPlatformJSON(c, &payload) {
+		return
+	}
+	id, ok := parsePathID(c)
+	if !ok {
+		return
+	}
+	updated, err := h.platform.SetIncidentStatus(c.Request.Context(), id, payload.Status)
+	if err != nil {
+		platformFailure(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"record": updated})
+}
+
+func bindPlatformJSON(c *gin.Context, target any) bool {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 256*1024)
+	if err := c.ShouldBindJSON(target); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body"})
+		return false
+	}
+	return true
+}
+
+func parsePathID(c *gin.Context) (uint, bool) {
+	value, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || value == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid record id"})
+		return 0, false
+	}
+	return uint(value), true
+}
+
+func pathID(c *gin.Context, target *uint) bool {
+	id, ok := parsePathID(c)
+	if ok {
+		*target = id
+	}
+	return ok
+}
+
+func isPlatformManager(c *gin.Context) bool {
+	value, ok := c.Get(authenticatedUserKey)
+	if !ok {
+		return false
+	}
+	user, ok := value.(domain.User)
+	return ok && (user.Role == "admin" || user.Role == "manager")
+}
+
+func platformFailure(c *gin.Context, err error) {
+	if errors.Is(err, usecase.ErrInvalidPlatformInput) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "check the required fields and allowed values"})
+		return
+	}
+	if errors.Is(err, domain.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "record not found"})
+		return
+	}
+	if errors.Is(err, domain.ErrInvalidTransition) {
+		c.JSON(http.StatusConflict, gin.H{"error": "that status change is not allowed from the current state"})
+		return
+	}
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "unique") || strings.Contains(message, "duplicate") {
+		c.JSON(http.StatusConflict, gin.H{"error": "a record with that identifier already exists"})
+		return
+	}
+	log.Printf("operations workspace request failed: %v", err)
+	c.JSON(http.StatusInternalServerError, gin.H{"error": "operations workspace request failed"})
+}
+
 const authenticatedUserKey = "authenticatedUser"
+const authenticatedSessionTokenKey = "authenticatedSessionToken"
+const sessionCookieName = "ost_session"
+const csrfCookieName = "ost_csrf"
 
 func (h *Handler) authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -285,6 +787,224 @@ func (h *Handler) authenticate() gin.HandlerFunc {
 func httpAuthChallenge(c *gin.Context) {
 	c.Header("WWW-Authenticate", `Basic realm="Auto Ticket System", charset="UTF-8"`)
 	c.AbortWithStatus(http.StatusUnauthorized)
+}
+
+func (h *Handler) sessionAuthentication() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+		if path == "/login" || path == "/api/auth/login" {
+			c.Next()
+			return
+		}
+		token, tokenErr := c.Cookie(sessionCookieName)
+		csrf, csrfErr := c.Cookie(csrfCookieName)
+		if tokenErr != nil || csrfErr != nil {
+			h.unauthorized(c)
+			return
+		}
+		user, err := h.security.AuthenticateSession(c.Request.Context(), token, csrf)
+		if err != nil {
+			h.clearSessionCookies(c)
+			h.unauthorized(c)
+			return
+		}
+		if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead && c.Request.Method != http.MethodOptions {
+			header := c.GetHeader("X-CSRF-Token")
+			if len(header) != len(csrf) || subtle.ConstantTimeCompare([]byte(header), []byte(csrf)) != 1 {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "request security token is missing or invalid; refresh the page and try again"})
+				return
+			}
+		}
+		c.Set(authenticatedUserKey, user)
+		c.Set(authenticatedSessionTokenKey, token)
+		c.Next()
+	}
+}
+
+func (h *Handler) unauthorized(c *gin.Context) {
+	if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "login required"})
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/login")
+	c.Abort()
+}
+
+type loginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	OTPCode  string `json:"otp_code"`
+}
+
+func (h *Handler) login(c *gin.Context) {
+	clientIP := c.ClientIP()
+	if !h.allowLoginAttempt(clientIP, time.Now()) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many login attempts; wait 15 minutes and try again"})
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4<<10)
+	var request loginRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "enter your username and password"})
+		return
+	}
+	credentials, err := h.security.CreateSession(c.Request.Context(), request.Username, request.Password, request.OTPCode)
+	if err != nil {
+		if errors.Is(err, usecase.ErrInvalidCredentials) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "username or password is incorrect"})
+			return
+		}
+		log.Printf("login session creation failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not sign in right now"})
+		return
+	}
+	h.resetLoginAttempts(clientIP)
+	maxAge := int(time.Until(credentials.ExpiresAt).Seconds())
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(sessionCookieName, credentials.Token, maxAge, "/", "", h.sessionCookieSecure, true)
+	c.SetCookie(csrfCookieName, credentials.CSRFToken, maxAge, "/", "", h.sessionCookieSecure, false)
+	c.Header("Cache-Control", "no-store")
+	c.JSON(http.StatusOK, gin.H{"user": credentials.User, "csrf_token": credentials.CSRFToken, "expires_at": credentials.ExpiresAt})
+}
+
+func (h *Handler) logout(c *gin.Context) {
+	token, _ := c.Get(authenticatedSessionTokenKey)
+	if raw, ok := token.(string); ok {
+		if err := h.security.RevokeSession(c.Request.Context(), raw); err != nil {
+			log.Printf("session revocation failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not sign out"})
+			return
+		}
+	}
+	h.clearSessionCookies(c)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *Handler) mfaStatus(c *gin.Context) {
+	user, ok := currentAuthenticatedUser(c)
+	if !ok {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	enabled, err := h.security.MFAStatus(c.Request.Context(), user.ID)
+	if err != nil {
+		log.Printf("MFA status lookup failed for user %d: %v", user.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load MFA status"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"enabled": enabled})
+}
+
+func (h *Handler) beginMFASetup(c *gin.Context) {
+	user, ok := currentAuthenticatedUser(c)
+	if !ok {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	secret, uri, err := h.security.BeginMFASetup(c.Request.Context(), user)
+	if err != nil {
+		if errors.Is(err, usecase.ErrMFAAlreadyEnabled) {
+			c.JSON(http.StatusConflict, gin.H{"error": "MFA is already enabled"})
+			return
+		}
+		if errors.Is(err, usecase.ErrMFAUnavailable) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "set MFA_ENCRYPTION_KEY before enrolling an authenticator"})
+			return
+		}
+		log.Printf("MFA setup failed for user %d: %v", user.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not start MFA setup"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"secret": secret, "otpauth_uri": uri})
+}
+
+func (h *Handler) confirmMFASetup(c *gin.Context) {
+	user, ok := currentAuthenticatedUser(c)
+	if !ok {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	var request struct {
+		Code string `json:"code"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "enter the six-digit authenticator code"})
+		return
+	}
+	if err := h.security.ConfirmMFASetup(c.Request.Context(), user, request.Code); err != nil {
+		if errors.Is(err, usecase.ErrMFAInvalidCode) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "authenticator code is incorrect or expired"})
+			return
+		}
+		if errors.Is(err, usecase.ErrMFAAlreadyEnabled) {
+			c.JSON(http.StatusConflict, gin.H{"error": "MFA is already enabled"})
+			return
+		}
+		log.Printf("MFA confirmation failed for user %d: %v", user.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not enable MFA"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"enabled": true, "message": "MFA enabled. Sign in again using your authenticator code."})
+}
+
+func (h *Handler) disableMFA(c *gin.Context) {
+	user, ok := currentAuthenticatedUser(c)
+	if !ok {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	var request struct {
+		Password string `json:"password"`
+		Code     string `json:"code"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "enter your password and authenticator code"})
+		return
+	}
+	if err := h.security.DisableMFA(c.Request.Context(), user, request.Password, request.Code); err != nil {
+		if errors.Is(err, usecase.ErrInvalidCredentials) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "password or authenticator code is incorrect"})
+			return
+		}
+		if errors.Is(err, usecase.ErrMFAInvalidCode) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "authenticator code is incorrect or expired"})
+			return
+		}
+		log.Printf("MFA disable failed for user %d: %v", user.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not disable MFA"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"enabled": false, "message": "MFA disabled. All sessions have been signed out."})
+}
+
+func (h *Handler) clearSessionCookies(c *gin.Context) {
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(sessionCookieName, "", -1, "/", "", h.sessionCookieSecure, true)
+	c.SetCookie(csrfCookieName, "", -1, "/", "", h.sessionCookieSecure, false)
+}
+
+func (h *Handler) allowLoginAttempt(ip string, now time.Time) bool {
+	h.loginMu.Lock()
+	defer h.loginMu.Unlock()
+	if h.loginFailures == nil {
+		h.loginFailures = make(map[string]loginRateEntry)
+	}
+	entry := h.loginFailures[ip]
+	if now.Sub(entry.window) > 15*time.Minute || entry.window.IsZero() {
+		entry = loginRateEntry{window: now}
+	}
+	if entry.count >= 20 {
+		return false
+	}
+	entry.count++
+	h.loginFailures[ip] = entry
+	return true
+}
+
+func (h *Handler) resetLoginAttempts(ip string) {
+	h.loginMu.Lock()
+	delete(h.loginFailures, ip)
+	h.loginMu.Unlock()
 }
 
 func (h *Handler) requireRoles(roles ...string) gin.HandlerFunc {
@@ -1578,6 +2298,7 @@ type createTicketRequest struct {
 	EmployeeID string `json:"employee_id"`
 	Status     string `json:"status"`
 	Problem    string `json:"problem"`
+	AssetTag   string `json:"asset_tag"`
 	AssignedTo string `json:"assigned_to"`
 	Priority   string `json:"priority"`
 }
@@ -1666,11 +2387,43 @@ func (h *Handler) setTicketPriority(c *gin.Context) {
 		c.JSON(http.StatusOK, toView(ticket, false))
 	case usecase.ErrInvalidPriority:
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case usecase.ErrSLAPaused:
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	case domain.ErrNotFound:
 		c.JSON(http.StatusNotFound, gin.H{"error": "ticket not found"})
 	default:
 		log.Printf("ticket priority update failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update ticket priority"})
+	}
+}
+
+func (h *Handler) setTicketSLAPause(c *gin.Context) {
+	var request struct {
+		Paused bool `json:"paused"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON request"})
+		return
+	}
+	previous, _ := h.tickets.Get(c.Request.Context(), c.Param("id"))
+	ticket, err := h.tickets.SetSLAPaused(c.Request.Context(), c.Param("id"), request.Paused)
+	switch err {
+	case nil:
+		if (previous.SLAPausedAt == nil) != (ticket.SLAPausedAt == nil) {
+			message := "SLA timer resumed"
+			if ticket.SLAPausedAt != nil {
+				message = "SLA timer paused while waiting"
+			}
+			h.recordWorkActivity(c, "ticket", ticket.ID, "sla_changed", message)
+		}
+		c.JSON(http.StatusOK, toView(ticket, false))
+	case usecase.ErrInvalidStatus:
+		c.JSON(http.StatusConflict, gin.H{"error": "completed tickets cannot pause or resume an SLA"})
+	case domain.ErrNotFound:
+		c.JSON(http.StatusNotFound, gin.H{"error": "ticket not found"})
+	default:
+		log.Printf("ticket SLA update failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update ticket SLA"})
 	}
 }
 
@@ -1682,7 +2435,7 @@ func (h *Handler) createTicket(c *gin.Context) {
 	}
 	ticket, emailQueued, err := h.tickets.Create(c.Request.Context(), usecase.CreateTicketInput{
 		Name: request.Name, EmployeeID: request.EmployeeID, Status: request.Status,
-		Problem: request.Problem, AssignedTo: request.AssignedTo, Priority: request.Priority,
+		Problem: request.Problem, AssetTag: request.AssetTag, AssignedTo: request.AssignedTo, Priority: request.Priority,
 	})
 	if err != nil {
 		h.writeCreateError(c, err)
@@ -1700,7 +2453,7 @@ func (h *Handler) writeCreateError(c *gin.Context, err error) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "employee name is required"})
 	case err == usecase.ErrEmployeeUnknown:
 		c.JSON(http.StatusNotFound, gin.H{"error": "employee not found"})
-	case err == usecase.ErrProblemRequired, err == usecase.ErrProblemTooLong, err == usecase.ErrAssigneeTooLong, err == usecase.ErrInvalidPriority:
+	case err == usecase.ErrProblemRequired, err == usecase.ErrProblemTooLong, err == usecase.ErrAssigneeTooLong, err == usecase.ErrAssetTagTooLong, err == usecase.ErrInvalidPriority:
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	default:
 		if ambiguous, ok := err.(*usecase.AmbiguousEmployeeError); ok {
@@ -1756,6 +2509,11 @@ func (h *Handler) listTickets(c *gin.Context) {
 	if err != nil || limit <= 0 || limit > usecase.MaxTicketLimit {
 		limit = 100
 	}
+	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if err != nil || offset < 0 || offset > 1000000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "offset must be between 0 and 1,000,000"})
+		return
+	}
 	status := strings.ToLower(strings.TrimSpace(c.Query("status")))
 	var from, until time.Time
 	if c.Query("from") != "" || c.Query("until") != "" {
@@ -1771,7 +2529,7 @@ func (h *Handler) listTickets(c *gin.Context) {
 			return
 		}
 	}
-	tickets, total, err := h.tickets.List(c.Request.Context(), status, from, until, limit)
+	tickets, total, err := h.tickets.Page(c.Request.Context(), status, from, until, c.Query("q"), limit, offset)
 	if err != nil {
 		if err == usecase.ErrInvalidFilter {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "status must be 'pending', 'in_progress', or 'done'"})
@@ -1785,7 +2543,7 @@ func (h *Handler) listTickets(c *gin.Context) {
 	for _, ticket := range tickets {
 		views = append(views, toView(ticket, false))
 	}
-	c.JSON(http.StatusOK, gin.H{"tickets": views, "count": len(views), "total": total})
+	c.JSON(http.StatusOK, gin.H{"tickets": views, "count": len(views), "total": total, "limit": limit, "offset": offset})
 }
 
 const MaxCSVExportRows = 10000
@@ -1806,7 +2564,7 @@ func (h *Handler) exportTicketsCSV(c *gin.Context) {
 			return
 		}
 	}
-	tickets, total, err := h.tickets.List(c.Request.Context(), status, from, until, MaxCSVExportRows)
+	tickets, total, err := h.tickets.Page(c.Request.Context(), status, from, until, c.Query("q"), MaxCSVExportRows, 0)
 	if errors.Is(err, usecase.ErrInvalidFilter) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "status must be pending, in_progress, or done"})
 		return
@@ -1820,17 +2578,6 @@ func (h *Handler) exportTicketsCSV(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "More than 10,000 tickets match. Narrow the date or status filter and export again."})
 		return
 	}
-	query := strings.ToLower(strings.TrimSpace(c.Query("q")))
-	if query != "" {
-		filtered := tickets[:0]
-		for _, ticket := range tickets {
-			haystack := strings.ToLower(strings.Join([]string{ticket.TicketNumber, ticket.EmployeeName, ticket.EmployeeID, ticket.Department, ticket.Problem, ticket.Priority}, " "))
-			if strings.Contains(haystack, query) {
-				filtered = append(filtered, ticket)
-			}
-		}
-		tickets = filtered
-	}
 	if len(tickets) == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "No tickets match the current filters."})
 		return
@@ -1839,13 +2586,13 @@ func (h *Handler) exportTicketsCSV(c *gin.Context) {
 	for _, ticket := range tickets {
 		rows = append(rows, []string{
 			strconv.FormatUint(uint64(ticket.ID), 10), ticket.TicketNumber, ticket.EmployeeName,
-			ticket.EmployeeID, ticket.Department, ticket.Problem, ticket.AssignedTo,
+			ticket.EmployeeID, ticket.Department, ticket.Problem, ticket.AssetTag, ticket.AssignedTo,
 			ticket.Priority, ticket.SLADueAt.UTC().Format(time.RFC3339), ticket.Status,
 			ticket.CreatedAt.UTC().Format(time.RFC3339),
 		})
 	}
 	filename := "tickets-" + time.Now().UTC().Format("20060102-150405") + ".csv"
-	writeCSVResponse(c, filename, []string{"ID", "Ticket number", "Employee", "Employee ID", "Department", "Problem", "Assigned to", "Priority", "SLA due (UTC)", "Status", "Created at (UTC)"}, rows)
+	writeCSVResponse(c, filename, []string{"ID", "Ticket number", "Employee", "Employee ID", "Department", "Problem", "Asset tag", "Assigned to", "Priority", "SLA due (UTC)", "Status", "Created at (UTC)"}, rows)
 }
 
 type createTaskRequest struct {
@@ -1876,8 +2623,13 @@ func (h *Handler) listTasks(c *gin.Context) {
 	if err != nil || limit <= 0 || limit > usecase.MaxTaskLimit {
 		limit = 100
 	}
+	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if err != nil || offset < 0 || offset > 1000000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "offset must be between 0 and 1,000,000"})
+		return
+	}
 	tasks, total, err := h.tasks.List(c.Request.Context(), domain.TaskFilter{
-		Status: c.Query("status"), Assignee: c.Query("assignee"), Query: c.Query("q"), Limit: limit,
+		Status: c.Query("status"), Assignee: c.Query("assignee"), Query: c.Query("q"), Limit: limit, Offset: offset,
 	})
 	if err != nil {
 		if err == usecase.ErrTaskInvalidStatus {
@@ -1892,7 +2644,7 @@ func (h *Handler) listTasks(c *gin.Context) {
 	for _, task := range tasks {
 		views = append(views, toTaskView(task))
 	}
-	c.JSON(http.StatusOK, gin.H{"tasks": views, "count": len(views), "total": total})
+	c.JSON(http.StatusOK, gin.H{"tasks": views, "count": len(views), "total": total, "limit": limit, "offset": offset})
 }
 
 func (h *Handler) exportTasksCSV(c *gin.Context) {

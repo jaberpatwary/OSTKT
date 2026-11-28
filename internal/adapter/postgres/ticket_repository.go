@@ -21,9 +21,11 @@ type ticketRecord struct {
 	EmployeeID   string
 	Department   string
 	Problem      string
+	AssetTag     string `gorm:"index"`
 	AssignedTo   string
 	Priority     string `gorm:"default:medium"`
 	SLADueAt     time.Time
+	SLAPausedAt  *time.Time
 	Email        string
 	Phone        string
 	Status       string `gorm:"default:pending"`
@@ -45,9 +47,10 @@ func recordFromDomain(ticket *domain.Ticket) ticketRecord {
 	return ticketRecord{
 		ID: ticket.ID, TicketNumber: ticket.TicketNumber,
 		EmployeeName: ticket.EmployeeName, EmployeeID: ticket.EmployeeID,
-		Department: ticket.Department, Problem: ticket.Problem,
+		Department: ticket.Department, Problem: ticket.Problem, AssetTag: ticket.AssetTag,
 		AssignedTo: ticket.AssignedTo, Priority: ticket.Priority, SLADueAt: ticket.SLADueAt,
-		Email: ticket.Email, Phone: ticket.Phone,
+		SLAPausedAt: ticket.SLAPausedAt,
+		Email:       ticket.Email, Phone: ticket.Phone,
 		Status:      ticket.Status,
 		EmailSentAt: ticket.EmailSentAt, CreatedAt: ticket.CreatedAt, UpdatedAt: ticket.UpdatedAt,
 	}
@@ -57,9 +60,10 @@ func (record ticketRecord) toDomain() domain.Ticket {
 	ticket := domain.Ticket{
 		ID: record.ID, TicketNumber: record.TicketNumber,
 		EmployeeName: record.EmployeeName, EmployeeID: record.EmployeeID,
-		Department: record.Department, Problem: record.Problem,
+		Department: record.Department, Problem: record.Problem, AssetTag: record.AssetTag,
 		AssignedTo: record.AssignedTo, Priority: record.Priority, SLADueAt: record.SLADueAt,
-		Email: record.Email, Phone: record.Phone,
+		SLAPausedAt: record.SLAPausedAt,
+		Email:       record.Email, Phone: record.Phone,
 		Status:      record.Status,
 		EmailSentAt: record.EmailSentAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
@@ -164,6 +168,13 @@ func (r *TicketRepository) SetPriority(ctx context.Context, id uint, priority st
 	return result.RowsAffected > 0, result.Error
 }
 
+func (r *TicketRepository) SetSLA(ctx context.Context, id uint, pausedAt *time.Time, slaDueAt time.Time) (bool, error) {
+	result := r.db.WithContext(ctx).Model(&ticketRecord{}).
+		Where("id = ?", id).
+		Updates(map[string]any{"sla_paused_at": pausedAt, "sla_due_at": slaDueAt, "updated_at": time.Now().UTC()})
+	return result.RowsAffected > 0, result.Error
+}
+
 func (r *TicketRepository) SetEmailSentAt(ctx context.Context, id uint, sentAt time.Time) error {
 	return r.db.WithContext(ctx).Model(&ticketRecord{}).Where("id = ?", id).Update("email_sent_at", sentAt).Error
 }
@@ -179,12 +190,16 @@ func (r *TicketRepository) List(ctx context.Context, filter domain.TicketFilter)
 	if !filter.CreatedUntil.IsZero() {
 		query = query.Where("created_at < ?", filter.CreatedUntil)
 	}
+	if filter.Query != "" {
+		like := "%" + strings.ToLower(filter.Query) + "%"
+		query = query.Where("(LOWER(ticket_number) LIKE ? OR LOWER(employee_name) LIKE ? OR LOWER(employee_id) LIKE ? OR LOWER(department) LIKE ? OR LOWER(problem) LIKE ? OR LOWER(asset_tag) LIKE ? OR LOWER(priority) LIKE ?)", like, like, like, like, like, like, like)
+	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	records := make([]ticketRecord, 0)
-	if err := query.Order("created_at DESC, id DESC").Limit(filter.Limit).Find(&records).Error; err != nil {
+	if err := query.Order("created_at DESC, id DESC").Limit(filter.Limit).Offset(filter.Offset).Find(&records).Error; err != nil {
 		return nil, 0, err
 	}
 	tickets := make([]domain.Ticket, 0, len(records))

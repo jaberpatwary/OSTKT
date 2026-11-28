@@ -203,18 +203,23 @@ Do not commit the real `employees.xlsx` workbook to this public repository; it c
 ### curl দিয়ে টেস্ট
 
 ```bash
-curl "http://localhost:8080/api/search?q=rah"
+CSRF=$(curl -fsS -c ost-cookies.txt -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"YOUR_ADMIN_PASSWORD"}' \
+  http://localhost:8080/api/auth/login | jq -r .csrf_token)
 
-curl -X POST http://localhost:8080/api/tickets \
+curl -b ost-cookies.txt "http://localhost:8080/api/search?q=rah"
+
+curl -b ost-cookies.txt -X POST http://localhost:8080/api/tickets \
+  -H "X-CSRF-Token: $CSRF" \
   -H "Content-Type: application/json" \
-  -d '{"name":"Rahim Uddin","status":"done","problem":"Email access issue","assigned_to":"IT Support"}'
+  -d '{"name":"Rahim Uddin","status":"pending","problem":"Email access issue","assigned_to":"IT Support"}'
 
-curl -X POST http://localhost:8080/api/tickets/TKT-20260410-4821/done
+curl -b ost-cookies.txt -H "X-CSRF-Token: $CSRF" -X POST http://localhost:8080/api/tickets/TKT-20260410-4821/done
 
-curl "http://localhost:8080/api/tickets?status=pending"
+curl -b ost-cookies.txt "http://localhost:8080/api/tickets?status=pending"
 ```
 
-(Use the username and password of an active account with curl Basic Auth, for example `-u username:password`.)
+For API access, save the login cookie jar and send the returned CSRF token as `X-CSRF-Token` on write requests. `jq` is used above to read the token from the login response.
 
 ---
 
@@ -257,6 +262,13 @@ curl "http://localhost:8080/api/tickets?status=pending"
 | `GROQ_MODEL` | `openai/gpt-oss-20b` | Ticket তথ্য extraction model |
 | `ATTACHMENT_DIR` | `attachments` | Uploaded ticket/task files; use persistent storage in production |
 | `APP_USER` / `APP_PASS` | — | Initial administrator credentials, used only when the users table is empty |
+| `SESSION_COOKIE_SECURE` | `false` locally | Set `true` when served over HTTPS; enables the Secure session cookies |
+| `MFA_ENCRYPTION_KEY` | — | Optional 32-byte base64 key for encrypted authenticator secrets; keep it backed up |
+| `EMAIL_WEBHOOK_SECRET` | — | Optional HMAC secret for signed inbound email-to-ticket webhook; use 32+ random characters |
+| `SLA_BUSINESS_HOURS` | `false` | Count SLA target time only within the configured local work calendar |
+| `SLA_BUSINESS_START` / `SLA_BUSINESS_END` | `09:00` / `17:00` | Local workday opening and closing time |
+| `SLA_BUSINESS_DAYS` | `Mon,Tue,Wed,Thu,Fri` | Comma-separated local workdays; use three-letter weekday names |
+| `SLA_HOLIDAYS` | — | Optional comma-separated local dates in `YYYY-MM-DD` format |
 | `APP_TIMEZONE` | `Asia/Dhaka` | টিকিট নম্বরের তারিখ ও ইমেইলের সময় |
 | `GIN_MODE` | `debug` | প্রোডাকশনে `release` |
 
@@ -312,7 +324,7 @@ The initial roles are:
 - **Manager:** ticket and task operations, plus read-only audit history.
 - **Agent:** ticket and task operations.
 
-Admins can deactivate accounts or change their role. The final active administrator cannot be deactivated or demoted. The audit page at `/admin/audit` records each authenticated write request's actor, role, action, route, response code, IP address, browser, and time. It intentionally does not store request bodies or passwords. The system uses HTTP Basic authentication, so production deployments must terminate HTTPS in front of the app.
+Admins can deactivate accounts or change their role. The final active administrator cannot be deactivated or demoted. The audit page at `/admin/audit` records each authenticated write request's actor, role, action, route, response code, IP address, browser, and time. It intentionally does not store request bodies or passwords. Sign-in uses database-backed sessions, CSRF tokens, a 20-attempt per-IP login limit, and optional TOTP authenticator MFA at `/account/security`. Set `SESSION_COOKIE_SECURE=true` behind HTTPS. Generate `MFA_ENCRYPTION_KEY` with `openssl rand -base64 32`, store it in a secret manager, and keep the same value for the lifetime of enrolled MFA accounts.
 
 ## Automatic work alerts
 
@@ -328,9 +340,37 @@ The same History panel supports private work-item attachments: PDF, PNG/JPG/GIF/
 
 Ticket Admin and Task Admin can export CSV files using the current filters. Ticket exports follow the selected day, status, and search text; task exports follow status and search text. Files include a UTF-8 BOM for spreadsheet compatibility, protect user-entered text from spreadsheet formula execution, and export up to 10,000 matching records at a time. If more records match, narrow the filters and export again.
 
+## Backups and restore
+
+Docker Compose runs a backup worker immediately at startup and then every 24 hours by default. It writes a verified PostgreSQL custom-format dump and a matching attachment archive to the `ticket-backups` named volume, retaining 30 days. Change `BACKUP_INTERVAL_SECONDS` or `BACKUP_RETENTION_DAYS` in `.env` to adjust this. The backup volume remains on this Docker host; copy it to encrypted off-site storage for disaster recovery. For restore, protect the current data, stop the app and backup worker, then run the restore-only service. This replaces database objects and extracts the archived attachments:
+
+```sh
+docker compose stop app backup
+CONFIRM_RESTORE=YES docker compose run --rm restore 20261128T120000Z
+docker compose up -d app backup
+```
+
+Replace the timestamp with the prefix shown by `docker compose logs backup` or the matching `.dump` filename. Keep a copy of the same MFA encryption key when restoring a database with enrolled MFA users.
+
+## Operations workspace
+
+Open `/workspace` for the service catalog, searchable knowledge base, equipment register, change planning, and incident/problem tracking. Service cards can prefill a ticket request, and matching published support guides appear while the issue is typed. A ticket can link an asset tag; when an employee is selected, their assigned equipment tags are offered as suggestions. Agents can browse services and guides, register a change, create an incident or problem record, and search equipment. Managers and admins can curate catalog entries and articles, maintain asset records, approve/reject/schedule changes, and advance incident recovery states. Writes use the normal signed-in session, CSRF protection, role checks, and audit log. Database tables are created automatically on startup; existing ticket and task records are kept.
+
+Ticket Admin can pause an SLA while the service desk is waiting for a requester and resume it when work continues. The due time is extended by the pause duration, and the alert scanner skips paused tickets. Priority changes are disabled until the SLA timer is resumed. Pause/resume actions are recorded in ticket history.
+
+### Inbound email to ticket
+
+The application exposes a provider-neutral signed endpoint at `POST /integrations/email/inbound`. Set `EMAIL_WEBHOOK_SECRET` in the server secret store to a random value at least 32 characters long. Configure the inbound mail provider to POST the raw JSON envelope below and set `X-Email-Timestamp` to the current Unix time. Set `X-Email-Signature` to `sha256=` plus the lowercase hex HMAC-SHA256 of `timestamp + "." + raw_body`, using the configured secret. The timestamp must be within five minutes. The message ID is persisted to suppress duplicate delivery. The sender address must exactly match one official employee email in the workbook; unmatched or ambiguous senders are rejected instead of creating tickets under the wrong person. Configure the mail gateway to validate sender authenticity before signing events.
+
+```json
+{"message_id":"<mail-provider-id@example.com>","from":"employee@example.com","subject":"Laptop cannot connect","text":"Wi-Fi disconnects after sign-in."}
+```
+
+The ticket description preserves the subject and text, limited to the current 2,000-character ticket field. Replies whose subject contains a ticket number such as `TKT-000123` are appended to that ticket's history when the sender matches the original requester. The endpoint does not read an inbox itself; connect an inbound mail provider or mail gateway that can send this signed webhook. Keep the webhook secret private and rotate it through the deployment secret store if it is exposed.
+
 ## Ticket priority and response targets
 
-Tickets are assigned an initial priority from issue keywords in Bangla, Banglish, or English. The rule-based estimate does not limit or rewrite the issue description; unrecognized descriptions default to Medium. Admins can change priority from the ticket list. The response target is recalculated from ticket creation using elapsed hours: Urgent 4 hours, High 8 hours, Medium 24 hours, and Low 72 hours. The Admin Panel shows overdue and due-within-four-hours counts for the selected date range and the target beside each ticket.
+Tickets are assigned an initial priority from issue keywords in Bangla, Banglish, or English. The rule-based estimate does not limit or rewrite the issue description; unrecognized descriptions default to Medium. Admins can change priority from the ticket list. Response targets are Urgent 4 hours, High 8 hours, Medium 24 hours, and Low 72 hours. By default these count elapsed hours. Set `SLA_BUSINESS_HOURS=true` to count only local work hours; configure the timezone with `APP_TIMEZONE`, set workday start/end and days, and list holidays in `SLA_HOLIDAYS`. The Admin Panel shows overdue and due-within-four-hours counts for the selected date range and the target beside each ticket. The existing alert scanner notifies relevant agents and managers when the target is near or overdue.
 
 Tickets can move between Pending, In progress, and Done. The dashboard's open-ticket queue includes both Pending and In progress work; the separate admin status filter can show each stage or reopen a completed ticket.
 

@@ -9,25 +9,33 @@ import (
 )
 
 type Config struct {
-	Port            string
-	DatabaseURL     string
-	SQLitePath      string
-	ExcelPath       string
-	ExcelSheet      string
-	IncludeInactive bool
-	Timezone        string
-	GinMode         string
-	AppUser         string
-	AppPassword     string
-	SMTPHost        string
-	SMTPPort        int
-	SMTPUser        string
-	SMTPPassword    string
-	SMTPFrom        string
-	SMTPFromName    string
-	GroqAPIKey      string
-	GroqModel       string
-	AttachmentDir   string
+	Port                string
+	DatabaseURL         string
+	SQLitePath          string
+	ExcelPath           string
+	ExcelSheet          string
+	IncludeInactive     bool
+	Timezone            string
+	GinMode             string
+	AppUser             string
+	AppPassword         string
+	SMTPHost            string
+	SMTPPort            int
+	SMTPUser            string
+	SMTPPassword        string
+	SMTPFrom            string
+	SMTPFromName        string
+	GroqAPIKey          string
+	GroqModel           string
+	AttachmentDir       string
+	SessionCookieSecure bool
+	MFAEncryptionKey    string
+	EmailWebhookSecret  string
+	SLABusinessHours    bool
+	SLABusinessStart    string
+	SLABusinessEnd      string
+	SLABusinessDays     string
+	SLAHolidays         string
 }
 
 func Load() (Config, error) {
@@ -37,25 +45,33 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	return Config{
-		Port:            value("PORT", "8080"),
-		DatabaseURL:     value("DATABASE_URL", ""),
-		SQLitePath:      value("SQLITE_PATH", "tickets.db"),
-		ExcelPath:       value("EXCEL_PATH", "employees.xlsx"),
-		ExcelSheet:      value("EXCEL_SHEET", "Master File"),
-		IncludeInactive: strings.EqualFold(value("INCLUDE_INACTIVE", "true"), "true"),
-		Timezone:        value("APP_TIMEZONE", "Asia/Dhaka"),
-		GinMode:         value("GIN_MODE", ""),
-		AppUser:         value("APP_USER", ""),
-		AppPassword:     value("APP_PASS", ""),
-		SMTPHost:        value("SMTP_HOST", ""),
-		SMTPPort:        smtpPort,
-		SMTPUser:        value("SMTP_USER", ""),
-		SMTPPassword:    value("SMTP_PASS", ""),
-		SMTPFrom:        value("SMTP_FROM", value("SMTP_USER", "")),
-		SMTPFromName:    value("SMTP_FROM_NAME", "Auto Ticket System"),
-		GroqAPIKey:      value("GROQ_API_KEY", ""),
-		GroqModel:       value("GROQ_MODEL", "openai/gpt-oss-20b"),
-		AttachmentDir:   value("ATTACHMENT_DIR", "attachments"),
+		Port:                value("PORT", "8080"),
+		DatabaseURL:         value("DATABASE_URL", ""),
+		SQLitePath:          value("SQLITE_PATH", "tickets.db"),
+		ExcelPath:           value("EXCEL_PATH", "employees.xlsx"),
+		ExcelSheet:          value("EXCEL_SHEET", "Master File"),
+		IncludeInactive:     strings.EqualFold(value("INCLUDE_INACTIVE", "true"), "true"),
+		Timezone:            value("APP_TIMEZONE", "Asia/Dhaka"),
+		GinMode:             value("GIN_MODE", ""),
+		AppUser:             value("APP_USER", ""),
+		AppPassword:         value("APP_PASS", ""),
+		SMTPHost:            value("SMTP_HOST", ""),
+		SMTPPort:            smtpPort,
+		SMTPUser:            value("SMTP_USER", ""),
+		SMTPPassword:        value("SMTP_PASS", ""),
+		SMTPFrom:            value("SMTP_FROM", value("SMTP_USER", "")),
+		SMTPFromName:        value("SMTP_FROM_NAME", "Auto Ticket System"),
+		GroqAPIKey:          value("GROQ_API_KEY", ""),
+		GroqModel:           value("GROQ_MODEL", "openai/gpt-oss-20b"),
+		AttachmentDir:       value("ATTACHMENT_DIR", "attachments"),
+		SessionCookieSecure: strings.EqualFold(value("SESSION_COOKIE_SECURE", "false"), "true"),
+		MFAEncryptionKey:    value("MFA_ENCRYPTION_KEY", ""),
+		EmailWebhookSecret:  value("EMAIL_WEBHOOK_SECRET", ""),
+		SLABusinessHours:    strings.EqualFold(value("SLA_BUSINESS_HOURS", "false"), "true"),
+		SLABusinessStart:    value("SLA_BUSINESS_START", "09:00"),
+		SLABusinessEnd:      value("SLA_BUSINESS_END", "17:00"),
+		SLABusinessDays:     value("SLA_BUSINESS_DAYS", "Mon,Tue,Wed,Thu,Fri"),
+		SLAHolidays:         value("SLA_HOLIDAYS", ""),
 	}, nil
 }
 

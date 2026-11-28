@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f172a">
+  <title>Operations Workspace · Service Desk</title>
+  <script>try { if (localStorage.getItem('ost-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (_) {}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="stylesheet" href="/theme.css?v=20261128-platform1">
+  <link rel="stylesheet" href="/premium.css?v=20261128-platform1">
+  <link rel="stylesheet" href="/experience.css?v=20261128-platform1">
+  <style>
+    body { font-family: Manrope, "Hind Siliguri", system-ui, sans-serif; }
+    .workspace-shell { background: radial-gradient(ellipse at top right, rgb(20 184 166 / .12), transparent 38%), linear-gradient(150deg,#f8fbff,#eef4ff); }
+    html.dark .workspace-shell { background: radial-gradient(ellipse at top right, rgb(20 184 166 / .11), transparent 38%), #0b1120; }
+    .workspace-tab[aria-selected="true"] { color: white; background: linear-gradient(110deg,#4f46e5,#0f9f9a); box-shadow: 0 8px 22px rgb(79 70 229 / .2); }
+    .record-card { border: 1px solid rgb(148 163 184 / .24); border-radius: 1rem; background: rgb(255 255 255 / .78); }
+    html.dark .record-card { background: rgb(23 32 51 / .84); border-color: #334155; }
+    .field { width: 100%; border: 1px solid #cbd5e1; border-radius: .75rem; padding: .7rem .8rem; background: white; color: #0f172a; }
+    html.dark .field { background: #111827; color: #e2e8f0; border-color: #475569; }
+    .field:focus { outline: 3px solid rgb(20 184 166 / .18); border-color: #14b8a6; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+  <main class="workspace-shell mx-auto min-h-screen max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8">
+    <header class="flex flex-wrap items-center justify-between gap-4">
+      <div><p class="text-xs font-bold uppercase tracking-[.2em] text-teal-600">Service Desk · Operations</p><h1 class="mt-1 text-3xl font-extrabold text-slate-900">Operations workspace</h1><p class="mt-1 text-sm text-slate-500">Services, trusted fixes, equipment, and change planning in one place.</p></div>
+      <nav class="flex flex-wrap gap-2" aria-label="Main navigation">
+        <a href="/dashboard" class="rounded-xl border border-slate-300 bg-white/80 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white">Dashboard</a>
+        <a href="/admin" class="rounded-xl border border-slate-300 bg-white/80 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white">Tickets</a>
+        <a href="/admin/tasks" class="rounded-xl border border-slate-300 bg-white/80 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white">Tasks</a>
+        <button data-theme-toggle type="button" class="rounded-xl border border-slate-300 bg-white/80 px-3 py-2 text-sm font-semibold text-slate-700">Dark mode</button>
+      </nav>
+    </header>
+
+    <div id="notice" role="status" aria-live="polite" class="mt-5 hidden rounded-xl border p-3 text-sm"></div>
+    <section class="mt-6 rounded-3xl border border-slate-200 bg-white/75 p-3 shadow-xl shadow-slate-900/5 backdrop-blur sm:p-5">
+      <div class="flex flex-wrap gap-2" role="tablist" aria-label="Operations modules">
+        <button class="workspace-tab rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600" role="tab" id="tab-services" aria-controls="panel-services" aria-selected="true" data-tab="services">Service catalog</button>
+        <button class="workspace-tab rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600" role="tab" id="tab-knowledge" aria-controls="panel-knowledge" aria-selected="false" data-tab="knowledge">Knowledge base</button>
+        <button class="workspace-tab rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600" role="tab" id="tab-assets" aria-controls="panel-assets" aria-selected="false" data-tab="assets">Assets</button>
+        <button class="workspace-tab rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600" role="tab" id="tab-changes" aria-controls="panel-changes" aria-selected="false" data-tab="changes">Change requests</button>
+        <button class="workspace-tab rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600" role="tab" id="tab-incidents" aria-controls="panel-incidents" aria-selected="false" data-tab="incidents">Incidents &amp; problems</button>
+      </div>
+
+      <section id="panel-services" role="tabpanel" aria-labelledby="tab-services" class="mt-5">
+        <div class="mb-4 flex flex-wrap items-end justify-between gap-3"><div><h2 class="text-xl font-extrabold text-slate-900">Request a standard service</h2><p class="text-sm text-slate-500">Clear service descriptions and default urgency help the desk route work consistently.</p></div><button type="button" data-refresh class="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold">Refresh</button></div>
+        <div id="servicesList" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
+        <form id="serviceForm" data-managers class="record-card mt-5 hidden grid gap-3 p-4 sm:grid-cols-2">
+          <h3 class="sm:col-span-2 text-sm font-extrabold uppercase tracking-wide text-slate-500">Manage service catalog</h3>
+          <input name="name" class="field" placeholder="Service name" required maxlength="120">
+          <input name="category" class="field" placeholder="Category (e.g. Workplace)" maxlength="80">
+          <select name="priority" class="field"><option value="medium">Default priority · Medium</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select>
+          <label class="flex items-center gap-2 text-sm font-semibold"><input name="active" type="checkbox" checked> Active in catalog</label>
+          <textarea name="description" class="field sm:col-span-2" placeholder="What this service includes and what details to provide" maxlength="1000" rows="2"></textarea>
+          <button class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 sm:col-span-2">Add service</button>
+        </form>
+      </section>
+
+      <section id="panel-knowledge" role="tabpanel" aria-labelledby="tab-knowledge" class="mt-5 hidden">
+        <div class="mb-4"><h2 class="text-xl font-extrabold text-slate-900">Knowledge base</h2><p class="text-sm text-slate-500">Search approved support steps before creating or updating a ticket.</p></div>
+        <label class="sr-only" for="knowledgeSearch">Search articles</label><input id="knowledgeSearch" class="field" type="search" placeholder="Search by issue, title, or keyword…">
+        <div id="knowledgeList" class="mt-4 grid gap-3 lg:grid-cols-2"></div>
+        <form id="articleForm" data-managers class="record-card mt-5 hidden grid gap-3 p-4">
+          <h3 class="text-sm font-extrabold uppercase tracking-wide text-slate-500">Publish a support article</h3>
+          <input name="title" class="field" placeholder="Article title" required maxlength="180">
+          <input name="tags" class="field" placeholder="Search tags, comma separated" maxlength="500">
+          <textarea name="body" class="field" placeholder="Steps, checks, and escalation instructions" required maxlength="30000" rows="7"></textarea>
+          <label class="flex items-center gap-2 text-sm font-semibold"><input name="published" type="checkbox" checked> Publish for all team members</label>
+          <button class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">Save article</button>
+        </form>
+      </section>
+
+      <section id="panel-assets" role="tabpanel" aria-labelledby="tab-assets" class="mt-5 hidden">
+        <div class="mb-4"><h2 class="text-xl font-extrabold text-slate-900">Equipment register</h2><p class="text-sm text-slate-500">Track laptops, network devices, peripherals, and their current owner.</p></div>
+        <label class="sr-only" for="assetSearch">Search assets</label><input id="assetSearch" class="field" type="search" placeholder="Search tag, device, serial number, or employee…">
+        <div id="assetsList" class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
+        <form id="assetForm" data-managers class="record-card mt-5 hidden grid gap-3 sm:grid-cols-2">
+          <h3 class="sm:col-span-2 text-sm font-extrabold uppercase tracking-wide text-slate-500">Register equipment</h3>
+          <input name="asset_tag" class="field" placeholder="Asset tag (unique)" required maxlength="60">
+          <input name="name" class="field" placeholder="Device name" required maxlength="160">
+          <input name="category" class="field" placeholder="Category (laptop, router…)" maxlength="100">
+          <select name="status" class="field"><option value="in_stock">In stock</option><option value="assigned">Assigned</option><option value="maintenance">Maintenance</option><option value="retired">Retired</option><option value="lost">Lost</option></select>
+          <input name="manufacturer" class="field" placeholder="Manufacturer" maxlength="100">
+          <input name="model" class="field" placeholder="Model" maxlength="100">
+          <input name="serial_number" class="field" placeholder="Serial number" maxlength="120">
+          <input name="assigned_employee_name" class="field" placeholder="Assigned employee name">
+          <input name="assigned_employee_id" class="field" placeholder="Employee ID">
+          <textarea name="notes" class="field sm:col-span-2" placeholder="Condition, warranty, or other notes" maxlength="2000" rows="2"></textarea>
+          <button class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 sm:col-span-2">Add asset</button>
+        </form>
+      </section>
+
+      <section id="panel-changes" role="tabpanel" aria-labelledby="tab-changes" class="mt-5 hidden">
+        <div class="mb-4"><h2 class="text-xl font-extrabold text-slate-900">Change planning</h2><p class="text-sm text-slate-500">Request, assess, schedule, and record changes to services or infrastructure.</p></div>
+        <form id="changeForm" class="record-card grid gap-3 p-4 sm:grid-cols-2">
+          <input name="title" class="field" placeholder="Change title" required maxlength="180">
+          <select name="risk" class="field"><option value="low">Low risk</option><option value="medium" selected>Medium risk</option><option value="high">High risk</option></select>
+          <input name="owner" class="field" placeholder="Planned owner (optional)">
+          <input name="window_start" class="field" type="datetime-local" aria-label="Planned start">
+          <input name="window_end" class="field" type="datetime-local" aria-label="Planned end">
+          <textarea name="description" class="field sm:col-span-2" placeholder="Purpose, impact, rollback plan, and validation steps" maxlength="5000" rows="3"></textarea>
+          <button class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 sm:col-span-2">Submit change request</button>
+        </form>
+        <div id="changesList" class="mt-4 grid gap-3 lg:grid-cols-2"></div>
+      </section>
+
+      <section id="panel-incidents" role="tabpanel" aria-labelledby="tab-incidents" class="mt-5 hidden">
+        <div class="mb-4 flex flex-wrap items-end justify-between gap-3"><div><h2 class="text-xl font-extrabold text-slate-900">Incident and problem management</h2><p class="text-sm text-slate-500">Track service impact, root cause, workaround, related tickets, and recovery.</p></div><label class="text-sm font-semibold text-slate-500">Show <select id="incidentTypeFilter" class="field mt-1"><option value="">Incidents and problems</option><option value="incident">Incidents</option><option value="problem">Problems</option></select></label></div>
+        <form id="incidentForm" class="record-card grid gap-3 p-4 sm:grid-cols-2">
+          <select name="record_type" class="field"><option value="incident">Incident</option><option value="problem">Problem investigation</option></select>
+          <input name="title" class="field" placeholder="Short title" required maxlength="180">
+          <input name="affected_service" class="field" placeholder="Affected service">
+          <select name="impact" class="field"><option value="single_user">Impact · Single user</option><option value="department">Department</option><option value="organization">Organization</option><option value="critical_service">Critical service</option></select>
+          <input name="owner" class="field" placeholder="Incident owner (optional)">
+          <input name="related_tickets" class="field" placeholder="Related ticket numbers, comma separated">
+          <textarea name="description" class="field sm:col-span-2" placeholder="What happened, who is affected, and when it began" maxlength="5000" rows="3"></textarea>
+          <textarea name="root_cause" class="field" placeholder="Root cause / investigation findings" maxlength="4000" rows="2"></textarea>
+          <textarea name="workaround" class="field" placeholder="Current workaround or recovery steps" maxlength="4000" rows="2"></textarea>
+          <button class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 sm:col-span-2">Create incident or problem</button>
+        </form>
+        <div id="incidentsList" class="mt-4 grid gap-3 lg:grid-cols-2"></div>
+      </section>
+    </section>
+    <p class="mt-4 text-center text-xs text-slate-500">Changes are recorded in the shared operations database and use the same sign-in, CSRF, role, and audit controls as ticket administration.</p>
+  </main>
+  <script src="/theme.js?v=20261128-platform1"></script>
+  <script>
+  (() => {
+    'use strict';
+    const $ = (id) => document.getElementById(id);
+    let canManage = false;
+    const notice = (text, error = false) => {
+      const box = $('notice'); box.textContent = text; box.className = 'mt-5 rounded-xl border p-3 text-sm ' + (error ? 'border-rose-300 bg-rose-50 text-rose-800' : 'border-emerald-300 bg-emerald-50 text-emerald-800');
+      window.setTimeout(() => box.classList.add('hidden'), 5000);
+    };
+    const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const api = async (path, options = {}) => {
+      const response = await fetch(path, { ...options, headers: { ...(options.body ? {'Content-Type':'application/json'} : {}), ...(options.headers || {}) } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    };
+    const formObject = (form) => Object.fromEntries(new FormData(form).entries());
+    const save = async (form, path, normalize) => {
+      const value = normalize(formObject(form));
+      const data = await api(path, { method:form.dataset.id ? 'PUT' : 'POST', body:JSON.stringify(value) });
+      form.reset();
+      notice('Saved successfully.');
+      return data;
+    };
+    const errorHandler = (fn) => async (...args) => { try { await fn(...args); } catch (error) { notice(error.message, true); } };
+
+    function serviceCard(item) {
+      return `<article class="record-card p-4"><div class="flex items-start justify-between gap-3"><div><p class="text-xs font-bold uppercase tracking-wider text-teal-600">${escapeHTML(item.category)}</p><h3 class="mt-1 text-lg font-extrabold text-slate-900">${escapeHTML(item.name)}</h3></div><span class="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold capitalize text-indigo-700">${escapeHTML(item.priority)}</span></div><p class="mt-2 text-sm leading-6 text-slate-600">${escapeHTML(item.description || 'Contact the service desk for help with this service.')}</p><div class="mt-3 flex flex-wrap gap-2">${item.active ? `<button type="button" data-request-service='${escapeHTML(JSON.stringify(item))}' class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white">Create ticket</button>` : '<span class="text-xs font-semibold text-slate-400">Inactive</span>'}${canManage ? `<button type="button" data-service='${escapeHTML(JSON.stringify(item))}' class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold">Edit</button>` : ''}</div></article>`;
+    }
+    function articleCard(item) {
+      return `<article class="record-card p-4"><div class="flex flex-wrap items-center justify-between gap-2"><h3 class="text-base font-extrabold text-slate-900">${escapeHTML(item.title)}</h3><span class="text-xs text-slate-400">Updated ${new Date(item.updated_at).toLocaleDateString()}</span></div><p class="mt-1 text-xs font-semibold text-teal-700">${escapeHTML(item.tags || 'Support guide')}</p><p class="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">${escapeHTML(item.body)}</p>${canManage ? `<button type="button" data-article='${escapeHTML(JSON.stringify(item))}' class="mt-3 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold">Edit</button>` : ''}</article>`;
+    }
+    function assetCard(item) {
+      return `<article class="record-card p-4"><div class="flex items-start justify-between gap-3"><div><p class="font-mono text-xs font-bold text-indigo-600">${escapeHTML(item.asset_tag)}</p><h3 class="mt-1 font-extrabold text-slate-900">${escapeHTML(item.name)}</h3></div><span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold capitalize text-slate-600">${escapeHTML(item.status.replace('_',' '))}</span></div><p class="mt-2 text-sm text-slate-500">${escapeHTML([item.category,item.manufacturer,item.model].filter(Boolean).join(' · ') || 'Uncategorized')}</p><p class="mt-1 text-xs text-slate-500">Serial: ${escapeHTML(item.serial_number || '—')} · Owner: ${escapeHTML(item.assigned_employee_name || 'Unassigned')}</p>${canManage ? `<button type="button" data-asset='${escapeHTML(JSON.stringify(item))}' class="mt-3 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold">Edit</button>` : ''}</article>`;
+    }
+    function changeCard(item) {
+      const transitions = { requested:['approved','rejected','cancelled'], approved:['scheduled','cancelled'], scheduled:['completed','cancelled'] };
+      const statuses = transitions[item.status] || [];
+      const controls = canManage ? `<div class="mt-3 flex flex-wrap gap-2">${statuses.map(status => `<button type="button" data-change="${item.id}" data-status="${status}" class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-bold capitalize">${status}</button>`).join('')}</div>` : '';
+      const schedule = item.window_start ? new Date(item.window_start).toLocaleString() + (item.window_end ? ' – ' + new Date(item.window_end).toLocaleString() : '') : 'Not scheduled';
+      return `<article class="record-card p-4"><div class="flex flex-wrap items-center justify-between gap-2"><h3 class="font-extrabold text-slate-900">${escapeHTML(item.title)}</h3><span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold capitalize text-amber-800">${escapeHTML(item.status)}</span></div><p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">${escapeHTML(item.description || 'No additional details.')}</p><p class="mt-3 text-xs text-slate-500">Requested by ${escapeHTML(item.requested_by)} · ${escapeHTML(item.risk)} risk · Owner ${escapeHTML(item.owner || 'unassigned')} · ${escapeHTML(schedule)}</p>${controls}</article>`;
+    }
+    function incidentCard(item) {
+      const transitions = { open:['investigating','resolved'], investigating:['identified','resolved'], identified:['monitoring','resolved'], monitoring:['investigating','resolved'], resolved:['closed','investigating'], closed:['investigating'] };
+      const controls = canManage ? `<div class="mt-3 flex flex-wrap gap-2">${(transitions[item.status] || []).map(status => `<button type="button" data-incident="${item.id}" data-status="${status}" class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-bold capitalize">${status}</button>`).join('')}</div>` : '';
+      const related = item.related_tickets ? ` · Related tickets ${escapeHTML(item.related_tickets)}` : '';
+      const rootCause = item.root_cause ? `<p class="mt-2 text-sm"><strong>Root cause:</strong> ${escapeHTML(item.root_cause)}</p>` : '';
+      const workaround = item.workaround ? `<p class="mt-1 text-sm"><strong>Workaround:</strong> ${escapeHTML(item.workaround)}</p>` : '';
+      return `<article class="record-card p-4"><div class="flex flex-wrap items-center justify-between gap-2"><div><p class="text-xs font-bold uppercase tracking-wide text-teal-600">${escapeHTML(item.record_type)} · ${escapeHTML(item.impact.replace('_',' '))}</p><h3 class="mt-1 font-extrabold text-slate-900">${escapeHTML(item.title)}</h3></div><span class="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold capitalize text-indigo-700">${escapeHTML(item.status)}</span></div><p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">${escapeHTML(item.description || 'No incident details added.')}</p>${rootCause}${workaround}<p class="mt-3 text-xs text-slate-500">Service ${escapeHTML(item.affected_service || 'unspecified')} · Owner ${escapeHTML(item.owner || 'unassigned')}${related}</p>${controls}</article>`;
+    }
+
+    const loadServices = errorHandler(async () => { const data = await api('/api/platform/services'); $('servicesList').innerHTML = data.services.length ? data.services.map(serviceCard).join('') : '<p class="text-sm text-slate-500">No services yet. Managers can add the first service below.</p>'; });
+    const loadArticles = errorHandler(async () => { const data = await api('/api/platform/knowledge?q=' + encodeURIComponent($('knowledgeSearch').value)); $('knowledgeList').innerHTML = data.articles.length ? data.articles.map(articleCard).join('') : '<p class="text-sm text-slate-500">No matching published articles.</p>'; });
+    const loadAssets = errorHandler(async () => { const data = await api('/api/platform/assets?q=' + encodeURIComponent($('assetSearch').value)); $('assetsList').innerHTML = data.assets.length ? data.assets.map(assetCard).join('') : '<p class="text-sm text-slate-500">No assets match this search.</p>'; });
+    const loadChanges = errorHandler(async () => { const data = await api('/api/platform/changes'); $('changesList').innerHTML = data.changes.length ? data.changes.map(changeCard).join('') : '<p class="text-sm text-slate-500">No change requests yet.</p>'; });
+    const loadIncidents = errorHandler(async () => { const data = await api('/api/platform/incidents?type=' + encodeURIComponent($('incidentTypeFilter').value)); $('incidentsList').innerHTML = data.records.length ? data.records.map(incidentCard).join('') : '<p class="text-sm text-slate-500">No matching incident or problem records.</p>'; });
+    const refresh = async () => { await Promise.all([loadServices(),loadArticles(),loadAssets(),loadChanges(),loadIncidents()]); };
+
+    document.querySelectorAll('[data-tab]').forEach((button) => button.addEventListener('click', () => {
+      document.querySelectorAll('[data-tab]').forEach((tab) => tab.setAttribute('aria-selected', String(tab === button)));
+      document.querySelectorAll('[role="tabpanel"]').forEach((panel) => panel.classList.toggle('hidden', panel.id !== 'panel-' + button.dataset.tab));
+    }));
+    document.querySelectorAll('[data-refresh]').forEach((button) => button.addEventListener('click', refresh));
+    $('knowledgeSearch').addEventListener('input', () => { clearTimeout(window.knowledgeTimer); window.knowledgeTimer = setTimeout(loadArticles, 250); });
+    $('assetSearch').addEventListener('input', () => { clearTimeout(window.assetTimer); window.assetTimer = setTimeout(loadAssets, 250); });
+    $('incidentTypeFilter').addEventListener('change', loadIncidents);
+
+    $('serviceForm').addEventListener('submit', errorHandler(async (event) => { event.preventDefault(); const form=event.currentTarget; const path=form.dataset.id ? '/api/platform/services/'+form.dataset.id : '/api/platform/services'; await save(form, path, (v) => ({ ...v, active:form.elements.namedItem('active').checked, priority:v.priority })); delete form.dataset.id; form.querySelector('button[type="submit"]').textContent='Add service'; await loadServices(); }));
+    $('articleForm').addEventListener('submit', errorHandler(async (event) => { event.preventDefault(); const form=event.currentTarget; const path=form.dataset.id ? '/api/platform/knowledge/'+form.dataset.id : '/api/platform/knowledge'; await save(form, path, (v) => ({ ...v, published:form.elements.namedItem('published').checked })); delete form.dataset.id; form.querySelector('button[type="submit"]').textContent='Save article'; await loadArticles(); }));
+    $('assetForm').addEventListener('submit', errorHandler(async (event) => { event.preventDefault(); const form=event.currentTarget; await save(form, form.dataset.id ? '/api/platform/assets/'+form.dataset.id : '/api/platform/assets', (v) => v); delete form.dataset.id; form.querySelector('button[type="submit"]').textContent='Add asset'; await loadAssets(); }));
+    $('changeForm').addEventListener('submit', errorHandler(async (event) => {
+      event.preventDefault(); const v=formObject(event.currentTarget); const user=window.operationsUser;
+      const payload={ title:v.title, description:v.description, risk:v.risk, owner:v.owner, requested_by:user?.display_name || user?.username || 'Service desk', window_start:v.window_start ? new Date(v.window_start).toISOString() : null, window_end:v.window_end ? new Date(v.window_end).toISOString() : null };
+      await api('/api/platform/changes',{method:'POST',body:JSON.stringify(payload)}); event.currentTarget.reset(); notice('Change request submitted for review.'); await loadChanges();
+    }));
+    $('incidentForm').addEventListener('submit', errorHandler(async (event) => { event.preventDefault(); const form=event.currentTarget, v=formObject(form); const payload={...v}; delete payload.submit; await api('/api/platform/incidents',{method:'POST',body:JSON.stringify(payload)}); form.reset(); notice('Incident or problem record created.'); await loadIncidents(); }));
+    $('servicesList').addEventListener('click', (event) => { const request=event.target.closest('[data-request-service]'); if(request) { const item=JSON.parse(request.dataset.requestService); sessionStorage.setItem('ost-service-ticket-draft', `Service: ${item.name}\n${item.description || 'Please describe the support you need.'}`); location.href='/?view=tickets&serviceRequest=1'; return; } const button=event.target.closest('[data-service]'); if(!button || !canManage)return; const form=$('serviceForm'), item=JSON.parse(button.dataset.service); form.dataset.id=item.id; for(const key of ['name','category','description','priority']) form.elements.namedItem(key).value=item[key] ?? ''; form.elements.namedItem('active').checked=item.active; form.querySelector('button[type="submit"]').textContent='Save service'; form.scrollIntoView({behavior:'smooth',block:'center'}); });
+    $('knowledgeList').addEventListener('click', (event) => { const button=event.target.closest('[data-article]'); if(!button || !canManage)return; const form=$('articleForm'), item=JSON.parse(button.dataset.article); form.dataset.id=item.id; for(const key of ['title','body','tags']) form.elements.namedItem(key).value=item[key] ?? ''; form.elements.namedItem('published').checked=item.published; form.querySelector('button[type="submit"]').textContent='Update article'; form.scrollIntoView({behavior:'smooth',block:'center'}); });
+    $('assetsList').addEventListener('click', (event) => { const button=event.target.closest('[data-asset]'); if (!button || !canManage) return; const form=$('assetForm'); const item=JSON.parse(button.dataset.asset); form.dataset.id=item.id; Object.entries(item).forEach(([key,value]) => { const field=form.elements.namedItem(key); if(field && field.type !== 'checkbox') field.value=value ?? ''; }); form.querySelector('button[type="submit"]').textContent='Update asset'; form.scrollIntoView({behavior:'smooth',block:'center'}); });
+    $('changesList').addEventListener('click', errorHandler(async (event) => { const button=event.target.closest('[data-change]'); if (!button) return; await api('/api/platform/changes/'+button.dataset.change+'/status',{method:'PATCH',body:JSON.stringify({status:button.dataset.status})}); notice('Change status updated.'); await loadChanges(); }));
+    $('incidentsList').addEventListener('click', errorHandler(async (event) => { const button=event.target.closest('[data-incident]'); if (!button) return; await api('/api/platform/incidents/'+button.dataset.incident+'/status',{method:'PATCH',body:JSON.stringify({status:button.dataset.status})}); notice('Incident status updated.'); await loadIncidents(); }));
+
+    api('/api/auth/me').then((data) => {
+      window.operationsUser=data.user;
+      canManage=['admin','manager'].includes(data.user?.role);
+      document.querySelectorAll('[data-managers]').forEach((form) => form.classList.toggle('hidden',!canManage));
+      refresh();
+    }).catch(() => { canManage=false; refresh(); });
+  })();
+  </script>
+</body>
+</html>

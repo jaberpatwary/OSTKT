@@ -58,6 +58,10 @@
           <tbody id="taskRows" class="divide-y divide-slate-100"></tbody>
         </table>
       </div>
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-violet-100 px-4 py-3" role="navigation" aria-label="Task pages">
+        <span id="taskPageSummary" class="text-xs text-slate-500">Page 1</span>
+        <div class="flex gap-2"><button id="taskPrevPage" type="button" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-40">Previous</button><button id="taskNextPage" type="button" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-40">Next</button></div>
+      </div>
       <p id="taskEmpty" class="hidden px-4 py-10 text-center text-sm text-slate-400">No tasks match this filter.</p>
     </section>
   </main>
@@ -68,6 +72,7 @@
     const number = (value) => new Intl.NumberFormat('en').format(value);
     const taskOwners = ['Rupok Kumar Roy', 'Towhedul Islam', 'Md. Imam Hossan Chowdhury', 'Muhammad Fokhrul Hasan', 'Md. Tanvir Ahamed Sarkar', 'Md. Fahad Hossen', 'Mabubul Alam Patwary'];
     const taskAssignees = [...taskOwners, 'IT Team'];
+    const taskPageSize = 50;
     function taskDisplayFields(task) {
       let createdBy = String(task.created_by || '').trim() || 'Md. Tanvir Ahamed Sarkar';
       let description = String(task.description || '').trim();
@@ -92,6 +97,8 @@
     }
     let tasks = [];
     let taskTotal = 0;
+    let taskPage = 0;
+    let taskSearchTimer = 0;
 
     async function getJSON(path, options) {
       const response = await fetch(path, { cache: 'no-store', ...(options || {}) });
@@ -100,21 +107,26 @@
       return { ok: response.ok, data };
     }
 
-    function updateCounts() {
-      $('allCount').textContent = number(tasks.length);
-      $('pendingCount').textContent = number(tasks.filter((task) => task.status === 'pending').length);
-      $('progressCount').textContent = number(tasks.filter((task) => task.status === 'in_progress').length);
-      $('doneCount').textContent = number(tasks.filter((task) => task.status === 'done').length);
+    function updateCounts(counts) {
+      $('allCount').textContent = number(counts.all);
+      $('pendingCount').textContent = number(counts.pending);
+      $('progressCount').textContent = number(counts.in_progress);
+      $('doneCount').textContent = number(counts.done);
     }
 
     function renderTasks() {
       const query = $('taskSearch').value.trim().toLocaleLowerCase();
       const status = $('taskStatusFilter').value;
       const visible = tasks.filter((task) => {
-        const haystack = [task.description, task.created_by, task.assigned_to, 'tsk-' + task.id].filter(Boolean).join(' ').toLocaleLowerCase();
+        const haystack = [task.title, task.description, task.created_by, task.assigned_to, 'tsk-' + task.id].filter(Boolean).join(' ').toLocaleLowerCase();
         return (!query || haystack.includes(query)) && (!status || task.status === status);
       });
-      $('taskSummary').textContent = `${number(visible.length)} shown · ${number(taskTotal)} total tasks${taskTotal > tasks.length ? ` · list preview: ${number(tasks.length)}` : ''}`;
+      const first = taskTotal === 0 ? 0 : taskPage * taskPageSize + 1;
+      const last = Math.min(taskPage * taskPageSize + visible.length, taskTotal);
+      $('taskSummary').textContent = `${number(first)}–${number(last)} / ${number(taskTotal)} tasks`;
+      $('taskPageSummary').textContent = `Page ${number(taskPage + 1)} of ${number(Math.max(1, Math.ceil(taskTotal / taskPageSize)))}`;
+      $('taskPrevPage').disabled = taskPage === 0;
+      $('taskNextPage').disabled = (taskPage + 1) * taskPageSize >= taskTotal;
       $('taskRows').replaceChildren(...visible.map((task) => {
         const display = taskDisplayFields(task);
         const row = document.createElement('tr');
@@ -172,26 +184,42 @@
 
     async function loadTasks() {
       const button = $('taskAdminRefresh'); button.disabled = true; button.textContent = 'Loading…'; $('taskAdminError').classList.add('hidden');
+      $('taskPrevPage').disabled = true; $('taskNextPage').disabled = true;
       try {
-        const result = await getJSON('/api/tasks?limit=500');
+        const params = new URLSearchParams({ limit: String(taskPageSize), offset: String(taskPage * taskPageSize) });
+        if ($('taskStatusFilter').value) params.set('status', $('taskStatusFilter').value);
+        if ($('taskSearch').value.trim()) params.set('q', $('taskSearch').value.trim());
+        const statusURLs = ['pending', 'in_progress', 'done'].map((status) => getJSON('/api/tasks?status=' + status + '&limit=1'));
+        const [result, ...counts] = await Promise.all([getJSON('/api/tasks?' + params.toString()), getJSON('/api/tasks?limit=1'), ...statusURLs]);
         if (!result.ok) throw new Error(result.data.error || 'Tasks could not be loaded.');
         tasks = Array.isArray(result.data.tasks) ? result.data.tasks : [];
         taskTotal = Number(result.data.total) || tasks.length;
-        updateCounts(); renderTasks();
+        if (taskPage > 0 && taskPage * taskPageSize >= taskTotal) {
+          taskPage = Math.max(0, Math.ceil(taskTotal / taskPageSize) - 1);
+          return loadTasks();
+        }
+        const overall = Number(counts[0].data.total) || 0;
+        updateCounts({ all: overall, pending: Number(counts[1].data.total) || 0, in_progress: Number(counts[2].data.total) || 0, done: Number(counts[3].data.total) || 0 });
+        renderTasks();
       } catch (error) {
         $('taskAdminError').textContent = error.message || 'Tasks could not be loaded.'; $('taskAdminError').classList.remove('hidden');
       } finally { button.disabled = false; button.textContent = '↻ Refresh'; }
     }
 
-    $('taskSearch').addEventListener('input', renderTasks);
-    $('taskStatusFilter').addEventListener('change', renderTasks);
+    $('taskSearch').addEventListener('input', () => {
+      clearTimeout(taskSearchTimer);
+      taskSearchTimer = setTimeout(() => { taskPage = 0; loadTasks(); }, 250);
+    });
+    $('taskStatusFilter').addEventListener('change', () => { taskPage = 0; loadTasks(); });
     $('taskAdminClearFilters').addEventListener('click', () => {
       $('taskSearch').value = '';
       $('taskStatusFilter').value = '';
-      renderTasks();
+      taskPage = 0; loadTasks();
       $('taskSearch').focus();
     });
     $('taskAdminRefresh').addEventListener('click', loadTasks);
+    $('taskPrevPage').addEventListener('click', () => { if (taskPage > 0) { taskPage--; loadTasks(); } });
+    $('taskNextPage').addEventListener('click', () => { if ((taskPage + 1) * taskPageSize < taskTotal) { taskPage++; loadTasks(); } });
     $('taskExportCSV').addEventListener('click', exportTasksCSV);
     loadTasks();
 

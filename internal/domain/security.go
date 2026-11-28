@@ -1,6 +1,23 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"time"
+)
+
+type LoginSession struct {
+	UserID    uint
+	TokenHash string
+	CSRFHash  string
+	ExpiresAt time.Time
+}
+
+type SessionCredentials struct {
+	Token     string
+	CSRFToken string
+	ExpiresAt time.Time
+	User      User
+}
 
 type SecurityRepository interface {
 	Migrate() error
@@ -13,4 +30,11 @@ type SecurityRepository interface {
 	UpdateUser(ctx context.Context, id uint, input UserUpdate, passwordHash string) (User, error)
 	CreateAudit(ctx context.Context, event AuditEvent) error
 	ListAudit(ctx context.Context, limit int) ([]AuditEvent, error)
+	CreateSession(ctx context.Context, session LoginSession) error
+	GetSession(ctx context.Context, tokenHash string) (LoginSession, error)
+	DeleteSession(ctx context.Context, tokenHash string) error
+	DeleteSessionsForUser(ctx context.Context, userID uint) error
+	DeleteExpiredSessions(ctx context.Context, now time.Time) error
+	GetMFA(ctx context.Context, userID uint) (secretCiphertext string, enabled bool, err error)
+	SetMFA(ctx context.Context, userID uint, secretCiphertext string, enabled bool) error
 }

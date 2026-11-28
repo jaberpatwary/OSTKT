@@ -264,6 +264,13 @@
             placeholder="কী সমস্যা হচ্ছে, সংক্ষেপে লিখুন..."
             class="w-full resize-y rounded-xl border border-slate-300 px-3 py-2 text-base outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"></textarea>
           <p class="mt-1 text-xs text-slate-400">সর্বোচ্চ ২০০০ অক্ষর</p>
+          <div id="ticketKnowledgeSuggestions" class="mt-3 hidden rounded-xl border border-teal-200 bg-teal-50/70 p-3" aria-live="polite"><p class="text-xs font-bold uppercase tracking-wide text-teal-800">Related support guides</p><div id="ticketKnowledgeList" class="mt-2 space-y-2"></div></div>
+        </div>
+        <div>
+          <label for="assetTagInput" class="mb-1 block text-sm font-semibold text-slate-700">সংশ্লিষ্ট asset tag <span class="font-normal text-slate-400">(ঐচ্ছিক)</span></label>
+          <input id="assetTagInput" list="employeeAssetOptions" maxlength="60" autocomplete="off" placeholder="যেমন AST-000123" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-base outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" />
+          <datalist id="employeeAssetOptions"></datalist>
+          <p id="assetTagHint" class="mt-1 text-xs text-slate-400">কর্মী বাছলে তার assigned equipment-এর tag দেখানো হবে।</p>
         </div>
         <div>
           <label for="assignedToInput" class="mb-1 block text-sm font-semibold text-slate-700">Assignee <span class="font-normal text-slate-400">(ঐচ্ছিক)</span></label>
@@ -392,6 +399,7 @@
           <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">🆔 আইডি</dt><dd id="rEmpId" class="text-right font-semibold text-slate-800"></dd></div>
           <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">🏢 বিভাগ</dt><dd id="rDept" class="text-right font-semibold text-slate-800"></dd></div>
           <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">সমস্যা</dt><dd id="rProblem" class="max-w-[65%] whitespace-pre-wrap break-words text-right font-medium text-slate-700"></dd></div>
+          <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">Asset tag</dt><dd id="rAsset" class="text-right font-mono text-sm font-semibold text-slate-700"></dd></div>
           <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">Assignee</dt><dd id="rAssignee" class="text-right font-semibold text-slate-800"></dd></div>
           <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">📧 ইমেইল</dt><dd id="rEmail" class="min-w-0 break-all text-right font-semibold text-slate-800"></dd></div>
           <div class="flex items-center justify-between gap-4"><dt class="shrink-0 text-slate-500">📊 স্ট্যাটাস</dt><dd><span id="rStatus" class="inline-flex rounded-full px-3 py-1 text-xs font-bold"></span></dd></div>
@@ -441,6 +449,8 @@
       employeeCard: $('employeeCard'), cardName: $('cardName'), cardEmpId: $('cardEmpId'), cardDept: $('cardDept'),
       cardEmail: $('cardEmail'), cardPhone: $('cardPhone'),
       ticketDetails: $('ticketDetails'), problemInput: $('problemInput'), assignedToInput: $('assignedToInput'),
+      assetTagInput: $('assetTagInput'), employeeAssetOptions: $('employeeAssetOptions'), assetTagHint: $('assetTagHint'),
+      ticketKnowledgeSuggestions: $('ticketKnowledgeSuggestions'), ticketKnowledgeList: $('ticketKnowledgeList'),
       actionButtons: $('actionButtons'), doneBtn: $('doneBtn'), pendingBtn: $('pendingBtn'), doneSub: $('doneSub'),
       pendingPanel: $('pendingPanel'), pendingCount: $('pendingCount'), pendingList: $('pendingList'),
       assistantInput: $('assistantInput'), assistantStatus: $('assistantStatus'),
@@ -464,7 +474,7 @@
       recentTicketCount: $('recentTicketCount'), clearTicketFilters: $('clearTicketFilters'),
       dashboardUpdated: $('dashboardUpdated'), dashboardRefresh: $('dashboardRefresh'), dashboardError: $('dashboardError'),
       resultHeader: $('resultHeader'), resultIcon: $('resultIcon'), resultTitle: $('resultTitle'), resultSubtitle: $('resultSubtitle'),
-      ticketNumber: $('ticketNumber'), rName: $('rName'), rEmpId: $('rEmpId'), rDept: $('rDept'), rProblem: $('rProblem'), rAssignee: $('rAssignee'), rEmail: $('rEmail'),
+      ticketNumber: $('ticketNumber'), rName: $('rName'), rEmpId: $('rEmpId'), rDept: $('rDept'), rProblem: $('rProblem'), rAsset: $('rAsset'), rAssignee: $('rAssignee'), rEmail: $('rEmail'),
       rStatus: $('rStatus'), rCreated: $('rCreated'), pendingNote: $('pendingNote'),
       printBtn: $('printBtn'), convertDoneBtn: $('convertDoneBtn'), newTicketBtn: $('newTicketBtn'),
       toastBox: $('toastBox'), toastText: $('toastText'), toastIcon: $('toastIcon'),
@@ -527,6 +537,7 @@
       ticket: null,       // রেজাল্ট স্ক্রিনের টিকিট
       pollToken: 0,       // ইমেইল স্ট্যাটাস পোলিং বাতিল করতে
     };
+    let assetLookupSequence = 0;
     let debounceTimer = null;
     let dashboardTickets = [];
     let taskEntries = [];
@@ -581,6 +592,38 @@
       let data = {};
       try { data = await res.json(); } catch (_) { /* JSON নয় */ }
       return { ok: res.ok, status: res.status, data };
+    }
+
+    let ticketKnowledgeTimer = 0;
+    let ticketKnowledgeSequence = 0;
+    async function updateTicketKnowledgeSuggestions() {
+      const query = el.problemInput.value.trim();
+      const sequence = ++ticketKnowledgeSequence;
+      if (query.length < 4) {
+        el.ticketKnowledgeList.replaceChildren();
+        el.ticketKnowledgeSuggestions.classList.add('hidden');
+        return;
+      }
+      try {
+        const { ok, data } = await api('/api/platform/knowledge?q=' + encodeURIComponent(query));
+        if (sequence !== ticketKnowledgeSequence) return;
+        const articles = ok && Array.isArray(data.articles) ? data.articles.slice(0, 3) : [];
+        el.ticketKnowledgeList.replaceChildren(...articles.map((article) => {
+          const card = document.createElement('details');
+          card.className = 'rounded-lg border border-teal-100 bg-white/80 px-3 py-2';
+          const title = document.createElement('summary');
+          title.className = 'cursor-pointer text-sm font-semibold text-slate-700';
+          title.textContent = article.title || 'Support guide';
+          const body = document.createElement('p');
+          body.className = 'mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600';
+          body.textContent = article.body || '';
+          card.append(title, body);
+          return card;
+        }));
+        el.ticketKnowledgeSuggestions.classList.toggle('hidden', articles.length === 0);
+      } catch (_) {
+        if (sequence === ticketKnowledgeSequence) el.ticketKnowledgeSuggestions.classList.add('hidden');
+      }
     }
 
     function appendAssistantMessage(role, content) {
@@ -1752,6 +1795,7 @@
     function selectEmployee(emp) {
       state.selected = emp;
       el.nameInput.value = emp.Name;
+      el.assetTagInput.value = '';
       toggleClear();
       hideSuggestions();
 
@@ -1767,6 +1811,7 @@
       }
       el.cardPhone.textContent = emp.Phone || '—';
       el.doneSub.textContent = emp.Email ? 'ইমেইল যাবে' : 'ইমেইল ঠিকানা নেই — শুধু সেভ হবে';
+      loadEmployeeAssets(emp);
 
       hide(el.hint);
       show(el.employeeCard);
@@ -1776,8 +1821,40 @@
       el.actionButtons.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'nearest' });
     }
 
+    async function loadEmployeeAssets(employee) {
+      const sequence = ++assetLookupSequence;
+      el.employeeAssetOptions.replaceChildren();
+      el.assetTagHint.textContent = 'Assigned asset খোঁজা হচ্ছে…';
+      const query = employee.EmployeeID || employee.Name;
+      try {
+        const { ok, data } = await api('/api/platform/assets?q=' + encodeURIComponent(query));
+        if (sequence !== assetLookupSequence) return;
+        if (!ok) throw new Error('asset list unavailable');
+        const assets = (Array.isArray(data.assets) ? data.assets : []).filter((asset) =>
+          asset.status === 'assigned' && (
+            (employee.EmployeeID && String(asset.assigned_employee_id).toLowerCase() === String(employee.EmployeeID).toLowerCase()) ||
+            String(asset.assigned_employee_name).trim().toLowerCase() === String(employee.Name).trim().toLowerCase()
+          )
+        );
+        for (const asset of assets) {
+          const option = document.createElement('option');
+          option.value = asset.asset_tag;
+          option.label = [asset.name, asset.model, asset.serial_number].filter(Boolean).join(' · ');
+          el.employeeAssetOptions.append(option);
+        }
+        el.assetTagHint.textContent = assets.length ? `${assets.length}টি assigned asset পাওয়া গেছে; tag বাছুন বা অন্য tag লিখুন।` : 'এই কর্মীর জন্য asset record নেই; প্রয়োজন হলে tag লিখুন।';
+      } catch (_) {
+        if (sequence !== assetLookupSequence) return;
+        el.assetTagHint.textContent = 'Asset lookup unavailable; চাইলে asset tag লিখতে পারেন।';
+      }
+    }
+
     function clearSelection() {
       state.selected = null;
+      assetLookupSequence++;
+      el.assetTagInput.value = '';
+      el.employeeAssetOptions.replaceChildren();
+      el.assetTagHint.textContent = 'কর্মী বাছলে তার assigned equipment-এর tag দেখানো হবে।';
       hide(el.employeeCard);
       hide(el.ticketDetails);
       hide(el.actionButtons);
@@ -1815,6 +1892,7 @@
             employee_id: state.selected.EmployeeID,
             status,
             problem: el.problemInput.value.trim(),
+            asset_tag: el.assetTagInput.value.trim(),
             assigned_to: el.assignedToInput.value.trim(),
           }),
         });
@@ -1878,6 +1956,7 @@
       el.rEmpId.textContent = emp.EmployeeID || '—';
       el.rDept.textContent = emp.Department || '—';
       el.rProblem.textContent = t.problem || '—';
+      el.rAsset.textContent = t.asset_tag || '—';
       el.rAssignee.textContent = t.assigned_to || 'Assign করা হয়নি';
       el.rEmail.textContent = emp.Email || '—';
       el.rStatus.className = `inline-flex rounded-full px-3 py-1 text-xs font-bold ${theme.badge}`;
@@ -1990,6 +2069,10 @@
       state.searchSeq++;
       el.nameInput.value = '';
       el.problemInput.value = '';
+      el.assetTagInput.value = '';
+      ticketKnowledgeSequence++;
+      el.ticketKnowledgeList.replaceChildren();
+      el.ticketKnowledgeSuggestions.classList.add('hidden');
       el.assignedToInput.value = '';
       clearSelection();
       hideSuggestions();
@@ -2443,6 +2526,10 @@
 
     el.ticketModeButton.addEventListener('click', () => switchWorkspace('tickets'));
     el.taskModeButton.addEventListener('click', () => switchWorkspace('tasks'));
+    el.problemInput.addEventListener('input', () => {
+      clearTimeout(ticketKnowledgeTimer);
+      ticketKnowledgeTimer = window.setTimeout(updateTicketKnowledgeSuggestions, 350);
+    });
     el.taskCancelEditButton.addEventListener('click', resetTaskForm);
     el.taskCreatedByInput.addEventListener('change', toggleTaskCreatorCustomField);
     el.taskClearSearchButton.addEventListener('click', () => {
@@ -2609,6 +2696,14 @@
     loadDashboard();
     loadAssistantStatus();
     switchWorkspace(new URLSearchParams(window.location.search).get('view') === 'tasks' ? 'tasks' : 'tickets', false);
+    try {
+      const serviceDraft = sessionStorage.getItem('ost-service-ticket-draft');
+      if (serviceDraft) {
+        el.problemInput.value = serviceDraft;
+        sessionStorage.removeItem('ost-service-ticket-draft');
+        el.problemInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    } catch (_) { /* The ticket form remains available if browser storage is disabled. */ }
     refreshAssistantMicDevices();
     if (window.matchMedia('(pointer: fine)').matches) el.nameInput.focus();
   })();

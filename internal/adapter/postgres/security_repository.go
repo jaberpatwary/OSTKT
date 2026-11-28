@@ -20,6 +20,8 @@ type userRecord struct {
 	Role         string `gorm:"size:20;not null;index"`
 	PasswordHash string `gorm:"size:100;not null"`
 	Active       bool   `gorm:"not null;default:true;index"`
+	MFASecret    string `gorm:"size:512;not null;default:''"`
+	MFAEnabled   bool   `gorm:"not null;default:false"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
@@ -30,6 +32,7 @@ func (r userRecord) toDomain() domain.User {
 	return domain.User{
 		ID: r.ID, Username: r.Username, DisplayName: r.DisplayName, Role: r.Role,
 		Active: r.Active, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		MFAEnabled: r.MFAEnabled,
 	}
 }
 
@@ -48,6 +51,20 @@ type auditRecord struct {
 
 func (auditRecord) TableName() string { return "audit_logs" }
 
+type sessionRecord struct {
+	TokenHash string    `gorm:"primaryKey;size:64"`
+	UserID    uint      `gorm:"not null;index"`
+	CSRFHash  string    `gorm:"size:64;not null"`
+	ExpiresAt time.Time `gorm:"not null;index"`
+	CreatedAt time.Time
+}
+
+func (sessionRecord) TableName() string { return "login_sessions" }
+
+func (r sessionRecord) toDomain() domain.LoginSession {
+	return domain.LoginSession{TokenHash: r.TokenHash, UserID: r.UserID, CSRFHash: r.CSRFHash, ExpiresAt: r.ExpiresAt}
+}
+
 func (r auditRecord) toDomain() domain.AuditEvent {
 	return domain.AuditEvent{
 		ID: r.ID, UserID: r.UserID, Username: r.Username, Role: r.Role,
@@ -63,7 +80,7 @@ func NewSecurityRepository(db *gorm.DB) *SecurityRepository {
 }
 
 func (r *SecurityRepository) Migrate() error {
-	return r.db.AutoMigrate(&userRecord{}, &auditRecord{})
+	return r.db.AutoMigrate(&userRecord{}, &auditRecord{}, &sessionRecord{})
 }
 
 func (r *SecurityRepository) HasUsers(ctx context.Context) (bool, error) {
@@ -165,6 +182,9 @@ func (r *SecurityRepository) UpdateUser(ctx context.Context, id uint, input doma
 		if err := tx.Model(&current).Updates(changes).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("user_id = ?", id).Delete(&sessionRecord{}).Error; err != nil {
+			return err
+		}
 		return tx.First(&updated, id).Error
 	}, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
@@ -198,4 +218,57 @@ func (r *SecurityRepository) ListAudit(ctx context.Context, limit int) ([]domain
 		events = append(events, record.toDomain())
 	}
 	return events, nil
+}
+
+func (r *SecurityRepository) CreateSession(ctx context.Context, session domain.LoginSession) error {
+	return r.db.WithContext(ctx).Create(&sessionRecord{
+		TokenHash: session.TokenHash, UserID: session.UserID, CSRFHash: session.CSRFHash, ExpiresAt: session.ExpiresAt,
+	}).Error
+}
+
+func (r *SecurityRepository) GetSession(ctx context.Context, tokenHash string) (domain.LoginSession, error) {
+	var record sessionRecord
+	if err := r.db.WithContext(ctx).First(&record, "token_hash = ?", tokenHash).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.LoginSession{}, domain.ErrNotFound
+		}
+		return domain.LoginSession{}, err
+	}
+	return record.toDomain(), nil
+}
+
+func (r *SecurityRepository) DeleteSession(ctx context.Context, tokenHash string) error {
+	return r.db.WithContext(ctx).Where("token_hash = ?", tokenHash).Delete(&sessionRecord{}).Error
+}
+
+func (r *SecurityRepository) DeleteSessionsForUser(ctx context.Context, userID uint) error {
+	return r.db.WithContext(ctx).Where("user_id = ?", userID).Delete(&sessionRecord{}).Error
+}
+
+func (r *SecurityRepository) DeleteExpiredSessions(ctx context.Context, now time.Time) error {
+	return r.db.WithContext(ctx).Where("expires_at <= ?", now).Delete(&sessionRecord{}).Error
+}
+
+func (r *SecurityRepository) GetMFA(ctx context.Context, userID uint) (string, bool, error) {
+	var record userRecord
+	if err := r.db.WithContext(ctx).First(&record, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", false, domain.ErrNotFound
+		}
+		return "", false, err
+	}
+	return record.MFASecret, record.MFAEnabled, nil
+}
+
+func (r *SecurityRepository) SetMFA(ctx context.Context, userID uint, secretCiphertext string, enabled bool) error {
+	result := r.db.WithContext(ctx).Model(&userRecord{}).Where("id = ?", userID).Updates(map[string]any{
+		"mfa_secret": secretCiphertext, "mfa_enabled": enabled,
+	})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }

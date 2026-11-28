@@ -66,11 +66,15 @@ func Run(cfg config.Config) error {
 	if err := attachmentRepository.Migrate(); err != nil {
 		return fmt.Errorf("migrate attachment schema: %w", err)
 	}
+	platformRepository := postgres.NewPlatformRepository(db)
+	if err := platformRepository.Migrate(); err != nil {
+		return fmt.Errorf("migrate operations workspace schema: %w", err)
+	}
 	attachmentStorage, err := filesystem.NewAttachmentStorage(cfg.AttachmentDir)
 	if err != nil {
 		return fmt.Errorf("initialize attachment storage: %w", err)
 	}
-	securityService := usecase.NewSecurityService(securityRepository)
+	securityService := usecase.NewSecurityService(securityRepository, cfg.MFAEncryptionKey)
 	if err := securityService.BootstrapAdmin(context.Background(), cfg.AppUser, cfg.AppPassword); err != nil {
 		return fmt.Errorf("bootstrap administrator account: %w", err)
 	}
@@ -83,16 +87,18 @@ func Run(cfg config.Config) error {
 	}
 
 	ticketService := usecase.NewTicketService(ticketRepository, employees, mailer, location)
+	ticketService.SetBusinessCalendar(usecase.NewBusinessCalendar(cfg.SLABusinessHours, location, cfg.SLABusinessStart, cfg.SLABusinessEnd, cfg.SLABusinessDays, cfg.SLAHolidays))
 	taskService := usecase.NewTaskService(taskRepository)
 	notificationService := usecase.NewNotificationService(ticketService, taskService, securityService, notificationRepository, location)
 	activityService := usecase.NewWorkActivityService(activityRepository)
 	attachmentService := usecase.NewAttachmentService(attachmentRepository, attachmentStorage)
+	platformService := usecase.NewPlatformService(platformRepository)
 	healthCheck := func(ctx context.Context) error {
 		return sqlDB.PingContext(ctx)
 	}
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpapi.NewRouterWithAttachments(ticketService, healthCheck, cfg, taskService, securityService, notificationService, activityService, attachmentService),
+		Handler:           httpapi.NewRouterWithAttachments(ticketService, healthCheck, cfg, taskService, securityService, notificationService, activityService, attachmentService, platformService),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

@@ -30,7 +30,7 @@ func (s *WorkActivityService) Record(ctx context.Context, actor domain.User, wor
 	}
 	kind = strings.ToLower(strings.TrimSpace(kind))
 	switch kind {
-	case "comment", "created", "status_changed", "assignee_changed", "priority_changed", "updated", "attachment_added":
+	case "comment", "created", "status_changed", "assignee_changed", "priority_changed", "sla_changed", "updated", "attachment_added":
 	default:
 		return domain.WorkActivity{}, ErrInvalidActivity
 	}
@@ -42,7 +42,7 @@ func (s *WorkActivityService) Record(ctx context.Context, actor domain.User, wor
 	if actorName == "" {
 		actorName = strings.TrimSpace(actor.Username)
 	}
-	if actor.ID == 0 || actorName == "" || actor.Role == "" {
+	if (actor.ID == 0 && actor.Role != "email") || actorName == "" || actor.Role == "" {
 		return domain.WorkActivity{}, ErrInvalidActivity
 	}
 	activity := domain.WorkActivity{

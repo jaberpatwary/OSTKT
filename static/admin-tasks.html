@@ -24,7 +24,7 @@
     @media (max-width: 760px) { #taskAdminHeader { align-items:flex-start; } #taskAdminNav { width:100%; justify-content:flex-start; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto !important; transition-duration:.01ms !important; } }
   </style>
-  <link rel="stylesheet" href="/experience.css?v=20261126-signal-desk2" />
+  <link rel="stylesheet" href="/experience.css?v=20261128-font-nav" />
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-800">
   <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -48,6 +48,13 @@
       <div class="flex flex-col gap-3 border-b border-violet-100 bg-violet-50/70 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div><p class="text-xs font-extrabold uppercase tracking-wider text-violet-700">TASK WORKSPACE</p><h2 id="taskQueueTitle" class="mt-1 text-xl font-bold text-slate-900">Manage tasks</h2><p id="taskSummary" class="text-sm text-slate-500">Loading tasks…</p></div>
         <div class="flex flex-col gap-2 sm:flex-row">
+          <div class="inline-flex shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Choose task date">
+            <button id="taskPrevDay" type="button" title="Previous day" aria-label="Previous day" class="rounded-lg px-2.5 py-2 text-sm font-bold text-slate-700 hover:bg-white">‹</button>
+            <label class="sr-only" for="taskDayFilter">Show tasks created on this day</label>
+            <input id="taskDayFilter" type="date" title="Choose a task date" class="min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm" />
+            <button id="taskNextDay" type="button" title="Next day" aria-label="Next day" class="rounded-lg px-2.5 py-2 text-sm font-bold text-slate-700 hover:bg-white">›</button>
+            <button id="taskToday" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" aria-label="Return to today">Today</button>
+          </div>
           <label class="sr-only" for="taskSearch">Search tasks</label><input id="taskSearch" type="search" placeholder="Search details, Given by, owner…" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
           <label class="sr-only" for="taskStatusFilter">Filter tasks by status</label><select id="taskStatusFilter" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"><option value="">All statuses</option><option value="pending">Pending</option><option value="in_progress">In progress</option><option value="done">Done</option></select>
           <button id="taskAdminClearFilters" type="button" class="hidden rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-50">Clear filters</button>
@@ -76,6 +83,33 @@
     const taskOwners = ['Rupok Kumar Roy', 'Towhedul Islam', 'Md. Imam Hossan Chowdhury', 'Muhammad Fokhrul Hasan', 'Md. Tanvir Ahamed Sarkar', 'Md. Fahad Hossen', 'Mabubul Alam Patwary'];
     const taskAssignees = [...taskOwners, 'IT Team'];
     const taskPageSize = 50;
+    const taskDayFilter = $('taskDayFilter');
+    function todayInDhaka() {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+    }
+    function shiftCalendarDay(day, amount) {
+      const [year, month, date] = day.split('-').map(Number);
+      return new Date(Date.UTC(year, month - 1, date + amount)).toISOString().slice(0, 10);
+    }
+    function taskDateBounds() {
+      const day = taskDayFilter.value || todayInDhaka();
+      const start = new Date(`${day}T00:00:00+06:00`);
+      const until = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+      return { from: start.toISOString(), until: until.toISOString() };
+    }
+    function syncTaskDateControls() {
+      const today = todayInDhaka();
+      taskDayFilter.max = today;
+      $('taskPrevDay').disabled = !taskDayFilter.value;
+      $('taskNextDay').disabled = !taskDayFilter.value || taskDayFilter.value >= today;
+    }
+    function setTaskDay(day) {
+      const today = todayInDhaka();
+      taskDayFilter.value = day > today ? today : day;
+      syncTaskDateControls();
+      taskPage = 0;
+      loadTasks();
+    }
     function taskDisplayFields(task) {
       let createdBy = String(task.created_by || '').trim() || 'Not recorded';
       let description = String(task.description || '').trim();
@@ -128,6 +162,7 @@
       const last = Math.min(taskPage * taskPageSize + visible.length, taskTotal);
       $('taskSummary').textContent = `${number(first)}–${number(last)} / ${number(taskTotal)} tasks`;
       $('taskPageSummary').textContent = `Page ${number(taskPage + 1)} of ${number(Math.max(1, Math.ceil(taskTotal / taskPageSize)))}`;
+      $('taskSummary').textContent += ` · Created ${taskDayFilter.value || todayInDhaka()}`;
       $('taskPrevPage').disabled = taskPage === 0;
       $('taskNextPage').disabled = (taskPage + 1) * taskPageSize >= taskTotal;
       $('taskRows').replaceChildren(...visible.map((task) => {
@@ -181,11 +216,16 @@
       const button = $('taskAdminRefresh'); button.disabled = true; button.textContent = 'Loading…'; $('taskAdminError').classList.add('hidden');
       $('taskPrevPage').disabled = true; $('taskNextPage').disabled = true;
       try {
-        const params = new URLSearchParams({ limit: String(taskPageSize), offset: String(taskPage * taskPageSize) });
+        const dateBounds = taskDateBounds();
+        const params = new URLSearchParams({ limit: String(taskPageSize), offset: String(taskPage * taskPageSize), ...dateBounds });
         if ($('taskStatusFilter').value) params.set('status', $('taskStatusFilter').value);
         if ($('taskSearch').value.trim()) params.set('q', $('taskSearch').value.trim());
-        const statusURLs = ['pending', 'in_progress', 'done'].map((status) => getJSON('/api/tasks?status=' + status + '&limit=1'));
-        const [result, ...counts] = await Promise.all([getJSON('/api/tasks?' + params.toString()), getJSON('/api/tasks?limit=1'), ...statusURLs]);
+        const statusURLs = ['pending', 'in_progress', 'done'].map((status) => {
+          const statusParams = new URLSearchParams({ status, limit: '1', ...dateBounds });
+          return getJSON('/api/tasks?' + statusParams.toString());
+        });
+        const overallParams = new URLSearchParams({ limit: '1', ...dateBounds });
+        const [result, ...counts] = await Promise.all([getJSON('/api/tasks?' + params.toString()), getJSON('/api/tasks?' + overallParams.toString()), ...statusURLs]);
         if (!result.ok) throw new Error(result.data.error || 'Tasks could not be loaded.');
         tasks = Array.isArray(result.data.tasks) ? result.data.tasks : [];
         taskTotal = Number(result.data.total) || tasks.length;
@@ -206,6 +246,19 @@
       taskSearchTimer = setTimeout(() => { taskPage = 0; loadTasks(); }, 250);
     });
     $('taskStatusFilter').addEventListener('change', () => { taskPage = 0; loadTasks(); });
+    taskDayFilter.addEventListener('change', () => {
+      const today = todayInDhaka();
+      if (!taskDayFilter.value || taskDayFilter.value > today) taskDayFilter.value = today;
+      syncTaskDateControls();
+      taskPage = 0;
+      loadTasks();
+    });
+    $('taskPrevDay').addEventListener('click', () => setTaskDay(shiftCalendarDay(taskDayFilter.value || todayInDhaka(), -1)));
+    $('taskNextDay').addEventListener('click', () => {
+      const nextDay = shiftCalendarDay(taskDayFilter.value || todayInDhaka(), 1);
+      if (nextDay <= todayInDhaka()) setTaskDay(nextDay);
+    });
+    $('taskToday').addEventListener('click', () => setTaskDay(todayInDhaka()));
     $('taskAdminClearFilters').addEventListener('click', () => {
       $('taskSearch').value = '';
       $('taskStatusFilter').value = '';
@@ -216,10 +269,13 @@
     $('taskPrevPage').addEventListener('click', () => { if (taskPage > 0) { taskPage--; loadTasks(); } });
     $('taskNextPage').addEventListener('click', () => { if ((taskPage + 1) * taskPageSize < taskTotal) { taskPage++; loadTasks(); } });
     $('taskExportCSV').addEventListener('click', exportTasksCSV);
+    taskDayFilter.value = todayInDhaka();
+    syncTaskDateControls();
     loadTasks();
 
     async function exportTasksCSV() {
       const params = new URLSearchParams();
+      Object.entries(taskDateBounds()).forEach(([key, value]) => params.set(key, value));
       if ($('taskStatusFilter').value) params.set('status', $('taskStatusFilter').value);
       if ($('taskSearch').value.trim()) params.set('q', $('taskSearch').value.trim());
       const button = $('taskExportCSV');

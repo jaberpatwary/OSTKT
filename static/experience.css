@@ -728,5 +728,46 @@ html.dark .border-blue-200, html.dark .border-blue-300 { border-color: #295366 !
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Shared typography and navigation sizing across the service desk pages. */
+body, body button, body input, body select, body textarea {
+  font-family: "Manrope", "Hind Siliguri", system-ui, sans-serif !important;
+}
+body > main > header nav {
+  display: flex;
+  align-items: center;
+  align-content: center;
+}
+body > main > header nav > a,
+body > main > header nav > button,
+.task-page-actions > a,
+.task-page-actions > button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  height: 44px;
+  min-height: 44px !important;
+  margin: 0;
+  padding: 0 12px !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  line-height: 1.15 !important;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+@media (max-width: 720px) {
+  body > main > header { align-items: flex-start; }
+  body > main > header nav { width: 100%; justify-content: flex-start; }
+  body > main > header nav > a,
+  body > main > header nav > button,
+  .task-page-actions > a,
+  .task-page-actions > button { flex: 0 0 auto !important; }
+  .task-page-actions { width: 100%; justify-content: flex-start; }
+}
 html.dark .task-problem-box { border-color: var(--premium-line); background: rgba(8, 16, 30, .48); }
 html.dark .task-problem-label { color: #6ed6e9; }

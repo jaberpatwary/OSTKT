@@ -16,7 +16,7 @@
     body { font-family: "Manrope", "Hind Siliguri", system-ui, sans-serif; }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
   </style>
-  <link rel="stylesheet" href="/experience.css?v=20261126-signal-desk2" />
+  <link rel="stylesheet" href="/experience.css?v=20261128-font-nav" />
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-800">
   <main class="mx-auto max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8">
@@ -74,9 +74,13 @@
           <p id="listSummary" class="text-sm text-slate-500" aria-live="polite">তালিকা লোড হচ্ছে…</p>
         </div>
         <div class="flex flex-col gap-2 sm:flex-row">
-          <label class="sr-only" for="ticketDayFilter">Show tickets created on one day</label>
-          <input id="ticketDayFilter" type="date" title="Show tickets for this day" class="rounded-xl border border-slate-300 bg-white px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200" />
-          <button id="ticketDateScopeToggle" type="button" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" aria-label="Show tickets from all dates">All dates</button>
+          <div class="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Choose ticket date">
+            <button id="ticketPrevDay" type="button" title="Previous day" aria-label="Previous day" class="rounded-lg px-2.5 py-2 text-sm font-bold text-slate-700 hover:bg-white">‹</button>
+            <label class="sr-only" for="ticketDayFilter">Show tickets created on this day</label>
+            <input id="ticketDayFilter" type="date" title="Choose a ticket date" class="min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200" />
+            <button id="ticketNextDay" type="button" title="Next day" aria-label="Next day" class="rounded-lg px-2.5 py-2 text-sm font-bold text-slate-700 hover:bg-white">›</button>
+            <button id="ticketDateScopeToggle" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" aria-label="Return to today">Today</button>
+          </div>
           <label class="sr-only" for="statusFilter">Status filter</label>
           <select id="statusFilter" class="rounded-xl border border-slate-300 bg-white px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
             <option value="">সব status</option>
@@ -136,9 +140,29 @@
     const exportButton = $('ticketExportCSV');
     const pageSize = 50;
     const number = (value) => new Intl.NumberFormat('bn-BD').format(value);
+    function todayInDhaka() {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+    }
+    function shiftCalendarDay(day, amount) {
+      const [year, month, date] = day.split('-').map(Number);
+      return new Date(Date.UTC(year, month - 1, date + amount)).toISOString().slice(0, 10);
+    }
+    function syncTicketDateControls() {
+      const today = todayInDhaka();
+      dayFilter.max = today;
+      $('ticketPrevDay').disabled = !dayFilter.value;
+      $('ticketNextDay').disabled = !dayFilter.value || dayFilter.value >= today;
+      dateScopeToggle.textContent = 'Today';
+      dateScopeToggle.setAttribute('aria-label', 'Return to today');
+    }
+    function setTicketDay(day) {
+      dayFilter.value = day;
+      syncTicketDateControls();
+      ticketPage = 0;
+      loadTickets();
+    }
     function ticketDayQuery() {
-      const day = dayFilter.value;
-      if (!day) return '';
+      const day = dayFilter.value || todayInDhaka();
       const start = new Date(`${day}T00:00:00+06:00`);
       const until = new Date(start.getTime() + 24 * 60 * 60 * 1000);
       return `&from=${encodeURIComponent(start.toISOString())}&until=${encodeURIComponent(until.toISOString())}`;
@@ -542,31 +566,24 @@
       ticketSearchTimer = setTimeout(() => { ticketPage = 0; loadTickets(); }, 250);
     });
     dayFilter.addEventListener('change', () => {
+      const today = todayInDhaka();
+      if (!dayFilter.value || dayFilter.value > today) dayFilter.value = today;
+      syncTicketDateControls();
       ticketPage = 0;
-      dateScopeToggle.textContent = dayFilter.value ? 'All dates' : 'Today';
-      dateScopeToggle.setAttribute('aria-label', dayFilter.value ? 'Show tickets from all dates' : 'Show today tickets only');
       loadTickets();
     });
-    dateScopeToggle.addEventListener('click', () => {
-      ticketPage = 0;
-      if (dayFilter.value) {
-        dayFilter.value = '';
-        dateScopeToggle.textContent = 'Today';
-        dateScopeToggle.setAttribute('aria-label', 'Show today tickets only');
-      } else {
-        dayFilter.value = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
-        dateScopeToggle.textContent = 'All dates';
-        dateScopeToggle.setAttribute('aria-label', 'Show tickets from all dates');
-      }
-      loadTickets();
+    $('ticketPrevDay').addEventListener('click', () => setTicketDay(shiftCalendarDay(dayFilter.value || todayInDhaka(), -1)));
+    $('ticketNextDay').addEventListener('click', () => {
+      const nextDay = shiftCalendarDay(dayFilter.value || todayInDhaka(), 1);
+      if (nextDay <= todayInDhaka()) setTicketDay(nextDay);
     });
+    dateScopeToggle.addEventListener('click', () => setTicketDay(todayInDhaka()));
     refresh.addEventListener('click', loadTickets);
     exportButton.addEventListener('click', exportTicketsCSV);
     $('ticketPrevPage').addEventListener('click', () => { if (ticketPage > 0) { ticketPage--; loadTickets(); } });
     $('ticketNextPage').addEventListener('click', () => { if ((ticketPage + 1) * pageSize < ticketTotal) { ticketPage++; loadTickets(); } });
-    dayFilter.value = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
-    dateScopeToggle.textContent = 'All dates';
-    dateScopeToggle.setAttribute('aria-label', 'Show tickets from all dates');
+    dayFilter.value = todayInDhaka();
+    syncTicketDateControls();
     loadTickets();
   })();
   </script>

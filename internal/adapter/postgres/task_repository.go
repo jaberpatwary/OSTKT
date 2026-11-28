@@ -69,6 +69,12 @@ func (r *TaskRepository) Get(ctx context.Context, id uint) (domain.Task, error) 
 
 func (r *TaskRepository) List(ctx context.Context, filter domain.TaskFilter) ([]domain.Task, int64, error) {
 	query := r.db.WithContext(ctx).Model(&taskRecord{})
+	if !filter.CreatedFrom.IsZero() {
+		query = query.Where("created_at >= ?", filter.CreatedFrom)
+	}
+	if !filter.CreatedUntil.IsZero() {
+		query = query.Where("created_at < ?", filter.CreatedUntil)
+	}
 	if filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)
 	}

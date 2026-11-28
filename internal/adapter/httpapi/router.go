@@ -2647,6 +2647,10 @@ func (h *Handler) listTasks(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "task service is unavailable"})
 		return
 	}
+	createdFrom, createdUntil, ok := parseTaskDateRange(c)
+	if !ok {
+		return
+	}
 	limit, err := strconv.Atoi(c.DefaultQuery("limit", "100"))
 	if err != nil || limit <= 0 || limit > usecase.MaxTaskLimit {
 		limit = 100
@@ -2657,7 +2661,8 @@ func (h *Handler) listTasks(c *gin.Context) {
 		return
 	}
 	tasks, total, err := h.tasks.List(c.Request.Context(), domain.TaskFilter{
-		Status: c.Query("status"), Assignee: c.Query("assignee"), Query: c.Query("q"), Limit: limit, Offset: offset,
+		Status: c.Query("status"), Assignee: c.Query("assignee"), Query: c.Query("q"),
+		CreatedFrom: createdFrom, CreatedUntil: createdUntil, Limit: limit, Offset: offset,
 	})
 	if err != nil {
 		if err == usecase.ErrTaskInvalidStatus {
@@ -2675,9 +2680,35 @@ func (h *Handler) listTasks(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"tasks": views, "count": len(views), "total": total, "limit": limit, "offset": offset})
 }
 
+func parseTaskDateRange(c *gin.Context) (time.Time, time.Time, bool) {
+	fromValue, untilValue := strings.TrimSpace(c.Query("from")), strings.TrimSpace(c.Query("until"))
+	if fromValue == "" && untilValue == "" {
+		return time.Time{}, time.Time{}, true
+	}
+	from, err := time.Parse(time.RFC3339, fromValue)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "from must be an RFC3339 timestamp"})
+		return time.Time{}, time.Time{}, false
+	}
+	until, err := time.Parse(time.RFC3339, untilValue)
+	if err != nil || !until.After(from) || until.Sub(from) > 24*time.Hour+time.Minute {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "until must be after from and within one day"})
+		return time.Time{}, time.Time{}, false
+	}
+	return from, until, true
+}
+
+func taskCreatedAtInRange(createdAt, from, until time.Time) bool {
+	return (from.IsZero() || !createdAt.Before(from)) && (until.IsZero() || createdAt.Before(until))
+}
+
 func (h *Handler) exportTasksCSV(c *gin.Context) {
 	if h.tasks == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "task service is unavailable"})
+		return
+	}
+	createdFrom, createdUntil, ok := parseTaskDateRange(c)
+	if !ok {
 		return
 	}
 	query := strings.TrimSpace(c.Query("q"))
@@ -2700,18 +2731,20 @@ func (h *Handler) exportTasksCSV(c *gin.Context) {
 				return
 			}
 			assignee := strings.TrimSpace(c.Query("assignee"))
-			if getErr == nil && (status == "" || status == task.Status) && (assignee == "" || assignee == task.AssignedTo) {
+			if getErr == nil && (status == "" || status == task.Status) && (assignee == "" || assignee == task.AssignedTo) && taskCreatedAtInRange(task.CreatedAt, createdFrom, createdUntil) {
 				tasks = []domain.Task{task}
 				total = 1
 			}
 		} else {
 			tasks, total, err = h.tasks.List(c.Request.Context(), domain.TaskFilter{
-				Status: status, Assignee: c.Query("assignee"), Query: query, Limit: MaxCSVExportRows,
+				Status: status, Assignee: c.Query("assignee"), Query: query,
+				CreatedFrom: createdFrom, CreatedUntil: createdUntil, Limit: MaxCSVExportRows,
 			})
 		}
 	} else {
 		tasks, total, err = h.tasks.List(c.Request.Context(), domain.TaskFilter{
-			Status: status, Assignee: c.Query("assignee"), Query: query, Limit: MaxCSVExportRows,
+			Status: status, Assignee: c.Query("assignee"), Query: query,
+			CreatedFrom: createdFrom, CreatedUntil: createdUntil, Limit: MaxCSVExportRows,
 		})
 	}
 	if errors.Is(err, usecase.ErrTaskInvalidStatus) {

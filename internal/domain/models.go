@@ -78,11 +78,13 @@ type Task struct {
 }
 
 type TaskFilter struct {
-	Status   string
-	Assignee string
-	Query    string
-	Limit    int
-	Offset   int
+	Status       string
+	Assignee     string
+	Query        string
+	CreatedFrom  time.Time
+	CreatedUntil time.Time
+	Limit        int
+	Offset       int
 }
 
 // User is an internal application account. Password material is deliberately

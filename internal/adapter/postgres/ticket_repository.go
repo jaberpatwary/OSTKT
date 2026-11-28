@@ -22,6 +22,7 @@ type ticketRecord struct {
 	Department   string
 	Problem      string
 	AssetTag     string `gorm:"index"`
+	CreatedBy    string `gorm:"size:256;index"`
 	AssignedTo   string
 	Priority     string `gorm:"default:medium"`
 	SLADueAt     time.Time
@@ -47,7 +48,7 @@ func recordFromDomain(ticket *domain.Ticket) ticketRecord {
 	return ticketRecord{
 		ID: ticket.ID, TicketNumber: ticket.TicketNumber,
 		EmployeeName: ticket.EmployeeName, EmployeeID: ticket.EmployeeID,
-		Department: ticket.Department, Problem: ticket.Problem, AssetTag: ticket.AssetTag,
+		Department: ticket.Department, Problem: ticket.Problem, AssetTag: ticket.AssetTag, CreatedBy: ticket.CreatedBy,
 		AssignedTo: ticket.AssignedTo, Priority: ticket.Priority, SLADueAt: ticket.SLADueAt,
 		SLAPausedAt: ticket.SLAPausedAt,
 		Email:       ticket.Email, Phone: ticket.Phone,
@@ -60,7 +61,7 @@ func (record ticketRecord) toDomain() domain.Ticket {
 	ticket := domain.Ticket{
 		ID: record.ID, TicketNumber: record.TicketNumber,
 		EmployeeName: record.EmployeeName, EmployeeID: record.EmployeeID,
-		Department: record.Department, Problem: record.Problem, AssetTag: record.AssetTag,
+		Department: record.Department, Problem: record.Problem, AssetTag: record.AssetTag, CreatedBy: record.CreatedBy,
 		AssignedTo: record.AssignedTo, Priority: record.Priority, SLADueAt: record.SLADueAt,
 		SLAPausedAt: record.SLAPausedAt,
 		Email:       record.Email, Phone: record.Phone,

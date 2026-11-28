@@ -35,6 +35,7 @@ type Ticket struct {
 	Department   string
 	Problem      string
 	AssetTag     string
+	CreatedBy    string
 	AssignedTo   string
 	Priority     string
 	SLADueAt     time.Time

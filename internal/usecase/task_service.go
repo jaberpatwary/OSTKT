@@ -20,7 +20,7 @@ var (
 	ErrTaskTitleTooLong       = errors.New("task title must be 160 characters or fewer")
 	ErrTaskDescriptionTooLong = errors.New("task description must be 2000 characters or fewer")
 	ErrTaskCreatorRequired    = errors.New("person who gave the task is required")
-	ErrTaskCreatorTooLong     = errors.New("person who gave the task must be 100 characters or fewer")
+	ErrTaskCreatorTooLong     = errors.New("person who gave the task must be 256 characters or fewer")
 	ErrTaskAssigneeTooLong    = errors.New("task assignee must be 100 characters or fewer")
 	ErrTaskInvalidPriority    = errors.New("priority must be low, medium, high, or urgent")
 	ErrTaskInvalidStatus      = errors.New("status must be pending, in_progress, or done")
@@ -71,7 +71,7 @@ func (s *TaskService) Create(ctx context.Context, input CreateTaskInput) (domain
 	if createdBy == "" {
 		createdBy = DefaultTaskCreator
 	}
-	if len([]rune(createdBy)) > 100 {
+	if len([]rune(createdBy)) > 256 {
 		return domain.Task{}, ErrTaskCreatorTooLong
 	}
 	assignee := strings.TrimSpace(input.AssignedTo)
@@ -139,7 +139,7 @@ func (s *TaskService) Update(ctx context.Context, id uint, input UpdateTaskInput
 		if createdBy == "" {
 			createdBy = DefaultTaskCreator
 		}
-		if len([]rune(createdBy)) > 100 {
+		if len([]rune(createdBy)) > 256 {
 			return domain.Task{}, ErrTaskCreatorTooLong
 		}
 		changes["created_by"] = createdBy

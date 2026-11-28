@@ -53,6 +53,7 @@ type CreateTicketInput struct {
 	Status     string
 	Problem    string
 	AssetTag   string
+	CreatedBy  string
 	AssignedTo string
 	Priority   string
 }
@@ -140,6 +141,7 @@ func (s *TicketService) Create(ctx context.Context, input CreateTicketInput) (do
 		Department:   employee.Department,
 		Problem:      problem,
 		AssetTag:     assetTag,
+		CreatedBy:    strings.TrimSpace(input.CreatedBy),
 		AssignedTo:   assignee,
 		Priority:     priority,
 		SLADueAt:     s.slaDueAt(time.Now(), slaHours),

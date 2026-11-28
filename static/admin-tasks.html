@@ -74,7 +74,7 @@
     const taskAssignees = [...taskOwners, 'IT Team'];
     const taskPageSize = 50;
     function taskDisplayFields(task) {
-      let createdBy = String(task.created_by || '').trim() || 'Md. Tanvir Ahamed Sarkar';
+      let createdBy = String(task.created_by || '').trim() || 'Not recorded';
       let description = String(task.description || '').trim();
       const knownCreator = [...taskOwners].sort((a, b) => b.length - a.length).find((name) => createdBy.toLocaleLowerCase().startsWith(name.toLocaleLowerCase()) && !/[\p{L}\p{N}]/u.test(createdBy.slice(name.length, name.length + 1)));
       if (knownCreator && createdBy.length > knownCreator.length) {
@@ -135,16 +135,9 @@
         const problemLabel = document.createElement('span'); problemLabel.className = 'task-problem-label'; problemLabel.textContent = 'PROBLEM / TASK DETAILS';
         const problemText = document.createElement('p'); problemText.className = 'task-admin-problem-text'; problemText.textContent = display.description || 'No details';
         problemBox.append(problemLabel, problemText); details.append(problemBox);
-        const givenByCell = document.createElement('td'); givenByCell.className = 'px-4 py-3';
-        const givenBy = document.createElement('select'); givenBy.className = 'max-w-56 rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs'; givenBy.setAttribute('aria-label', 'Given by for task ' + task.id);
-        const currentCreator = display.createdBy;
-        if (!currentCreator) {
-          const missing = new Option('Not recorded', ''); missing.disabled = true; givenBy.append(missing);
-        } else if (!taskOwners.includes(currentCreator)) {
-          givenBy.append(new Option(currentCreator + ' (current)', currentCreator));
-        }
-        taskOwners.forEach((name) => givenBy.append(new Option(name, name)));
-        givenBy.value = currentCreator; givenByCell.append(givenBy);
+        const givenByCell = document.createElement('td'); givenByCell.className = 'px-4 py-3 text-slate-700';
+        const givenBy = document.createElement('span'); givenBy.textContent = display.createdBy;
+        givenByCell.append(givenBy);
         const ownerCell = document.createElement('td'); ownerCell.className = 'px-4 py-3';
         const owner = document.createElement('select'); owner.className = 'max-w-56 rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs';
         const names = [...taskAssignees];
@@ -162,7 +155,6 @@
           save.disabled = true; save.textContent = 'Saving…'; $('taskAdminError').classList.add('hidden');
           try {
             const changes = { description: display.description, assigned_to: owner.value, status: taskStatus.value };
-            if (givenBy.value) changes.created_by = givenBy.value;
             const result = await getJSON('/api/tasks/' + encodeURIComponent(task.id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes) });
             if (!result.ok) throw new Error(result.data.error || 'Task update failed.');
             await loadTasks();

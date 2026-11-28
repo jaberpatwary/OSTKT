@@ -116,9 +116,9 @@
         <div class="task-workspace-grid">
           <form id="taskForm" class="task-form-card">
             <div class="task-form-heading"><span class="task-form-icon">＋</span><div><h2 id="taskFormTitle">Create a task</h2><p>Capture a piece of work and give it an owner.</p></div></div>
-            <p class="task-form-help">Given by = যিনি কাজটি দিয়েছেন। Assign to = যিনি কাজটি করবেন। নাম তালিকায় না থাকলে “Someone else…” বেছে নাম লিখুন।</p>
-            <label for="taskCreatedByInput">Given by <small>Defaults to Md. Tanvir Ahamed Sarkar</small></label>
-            <select id="taskCreatedByInput" required><option>Rupok Kumar Roy</option><option>Towhedul Islam</option><option>Md. Imam Hossan Chowdhury</option><option>Muhammad Fokhrul Hasan</option><option value="Md. Tanvir Ahamed Sarkar" selected>Md. Tanvir Ahamed Sarkar (default)</option><option>Md. Fahad Hossen</option><option>Mabubul Alam Patwary</option><option value="__other__">Someone else…</option></select>
+            <p class="task-form-help">Given by is set automatically to the account you signed in with. Assign to is the person who will do the work.</p>
+            <label for="taskCreatedByInput">Given by <small id="taskCreatorHint">Loading signed-in account…</small></label>
+            <select id="taskCreatedByInput" required><option value="" selected disabled>Loading account...</option></select>
             <div id="taskCreatorCustomWrap" class="hidden flex flex-col gap-2">
               <label class="text-xs font-bold text-slate-700" for="taskCreatorCustomInput">Requester name <span class="text-rose-500">*</span></label>
               <input id="taskCreatorCustomInput" type="text" maxlength="100" autocomplete="name" placeholder="Type the requester's name" />
@@ -401,6 +401,7 @@
           <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">সমস্যা</dt><dd id="rProblem" class="max-w-[65%] whitespace-pre-wrap break-words text-right font-medium text-slate-700"></dd></div>
           <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">Asset tag</dt><dd id="rAsset" class="text-right font-mono text-sm font-semibold text-slate-700"></dd></div>
           <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">Assignee</dt><dd id="rAssignee" class="text-right font-semibold text-slate-800"></dd></div>
+          <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">Created by</dt><dd id="rCreator" class="text-right font-semibold text-slate-800"></dd></div>
           <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">📧 ইমেইল</dt><dd id="rEmail" class="min-w-0 break-all text-right font-semibold text-slate-800"></dd></div>
           <div class="flex items-center justify-between gap-4"><dt class="shrink-0 text-slate-500">📊 স্ট্যাটাস</dt><dd><span id="rStatus" class="inline-flex rounded-full px-3 py-1 text-xs font-bold"></span></dd></div>
           <div class="flex items-start justify-between gap-4"><dt class="shrink-0 text-slate-500">🕐 তৈরি</dt><dd id="rCreated" class="text-right font-semibold text-slate-800"></dd></div>
@@ -474,7 +475,7 @@
       recentTicketCount: $('recentTicketCount'), clearTicketFilters: $('clearTicketFilters'),
       dashboardUpdated: $('dashboardUpdated'), dashboardRefresh: $('dashboardRefresh'), dashboardError: $('dashboardError'),
       resultHeader: $('resultHeader'), resultIcon: $('resultIcon'), resultTitle: $('resultTitle'), resultSubtitle: $('resultSubtitle'),
-      ticketNumber: $('ticketNumber'), rName: $('rName'), rEmpId: $('rEmpId'), rDept: $('rDept'), rProblem: $('rProblem'), rAsset: $('rAsset'), rAssignee: $('rAssignee'), rEmail: $('rEmail'),
+      ticketNumber: $('ticketNumber'), rName: $('rName'), rEmpId: $('rEmpId'), rDept: $('rDept'), rProblem: $('rProblem'), rAsset: $('rAsset'), rAssignee: $('rAssignee'), rCreator: $('rCreator'), rEmail: $('rEmail'),
       rStatus: $('rStatus'), rCreated: $('rCreated'), pendingNote: $('pendingNote'),
       printBtn: $('printBtn'), convertDoneBtn: $('convertDoneBtn'), newTicketBtn: $('newTicketBtn'),
       toastBox: $('toastBox'), toastText: $('toastText'), toastIcon: $('toastIcon'),
@@ -541,6 +542,7 @@
     let debounceTimer = null;
     let dashboardTickets = [];
     let taskEntries = [];
+    let signedInCreatorName = '';
     let editingTaskId = null;
     let taskSearchTimer = null;
     let activeIssueFilter = '';
@@ -592,6 +594,20 @@
       let data = {};
       try { data = await res.json(); } catch (_) { /* JSON নয় */ }
       return { ok: res.ok, status: res.status, data };
+    }
+
+    async function loadCurrentUser() {
+      try {
+        const { ok, data } = await api('/api/auth/me');
+        const user = ok && data.user ? data.user : null;
+        signedInCreatorName = String(user?.display_name || user?.username || '').trim();
+        if (!signedInCreatorName) throw new Error('Signed-in account name unavailable');
+        setTaskCreatorValue(signedInCreatorName);
+        el.taskCreatedByInput.disabled = true;
+        $('taskCreatorHint').textContent = `Signed in as ${signedInCreatorName}`;
+      } catch (_) {
+        $('taskCreatorHint').textContent = 'Could not identify signed-in account';
+      }
     }
 
     let ticketKnowledgeTimer = 0;
@@ -649,7 +665,8 @@
       const assignee = document.createElement('p'); assignee.className = 'mt-1 text-slate-600'; assignee.textContent = `Assignee: ${ticket.assigned_to || 'দেওয়া হয়নি'}`;
       const open = document.createElement('button'); open.type = 'button'; open.className = 'mt-2 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 font-semibold text-emerald-800 hover:bg-emerald-100'; open.textContent = 'Full ticket দেখুন';
       open.addEventListener('click', () => showResult(ticket));
-      card.append(title, name, problem, assignee, open);
+      const creator = document.createElement('p'); creator.className = 'mt-1 text-slate-600'; creator.textContent = 'Created by: ' + (ticket.created_by || 'Not recorded');
+      card.append(title, name, problem, assignee, creator, open);
       el.assistantMessages.append(card);
       el.assistantMessages.scrollTop = el.assistantMessages.scrollHeight;
     }
@@ -1015,7 +1032,7 @@
           el.assistantMic.textContent = '🎙️';
           appendAssistantTask(data.task);
           assistantConversation.length = 0;
-          assistantConversation.push({ role: 'assistant', content: 'Hello! Describe the task in your own words. Given by defaults to Md. Tanvir Ahamed Sarkar, and without an individual assignee it goes to IT Team.' });
+          assistantConversation.push({ role: 'assistant', content: 'Hello! Describe the task in your own words. Your signed-in account is recorded as Given by; an omitted assignee goes to IT Team.' });
           assistantConversationEmployeeID = '';
           loadTaskBoard();
           el.assistantStatus.textContent = 'Task created · keep chatting to add another task.';
@@ -1498,7 +1515,8 @@
         const summary = document.createElement('p');
         summary.className = 'truncate text-xs text-slate-500';
         summary.textContent = `${ticket.ticket_number || ''} · ${ticket.problem || 'No description'}${ticket.assigned_to ? ` · ${ticket.assigned_to}` : ''}`;
-        details.append(person, summary);
+        const creator = document.createElement('p'); creator.className = 'truncate text-[10px] text-slate-500'; creator.textContent = 'Created by: ' + (ticket.created_by || 'Not recorded');
+        details.append(person, summary, creator);
         const status = document.createElement('span');
         status.className = `shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${ticket.status === 'done' ? 'bg-emerald-100 text-emerald-700' : ticket.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`;
         status.textContent = ticket.status === 'done' ? 'Done' : ticket.status === 'in_progress' ? 'In progress' : 'Pending';
@@ -1534,7 +1552,8 @@
           const overdue = !Number.isNaN(dueAt.getTime()) && dueAt.getTime() < Date.now();
           const sla = document.createElement('p'); sla.className = `truncate text-[10px] font-semibold ${overdue ? 'text-rose-600' : 'text-slate-500'}`;
           sla.textContent = `${priority} priority · ${overdue ? 'SLA overdue' : 'SLA due'} ${Number.isNaN(dueAt.getTime()) ? 'not set' : formatDate(dueAt.toISOString())}`;
-          info.append(person, issue, sla);
+          const creator = document.createElement('p'); creator.className = 'truncate text-[10px] text-slate-500'; creator.textContent = 'Created by: ' + (ticket.created_by || 'Not recorded');
+          info.append(person, issue, creator, sla);
           info.addEventListener('click', () => showResult(ticket));
           const done = document.createElement('button'); done.type = 'button'; done.className = 'shrink-0 rounded-lg bg-emerald-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50'; done.textContent = 'Done';
           done.addEventListener('click', () => convertToDone(ticket.id, done, false));
@@ -1957,6 +1976,7 @@
       el.rDept.textContent = emp.Department || '—';
       el.rProblem.textContent = t.problem || '—';
       el.rAsset.textContent = t.asset_tag || '—';
+      el.rCreator.textContent = t.created_by || 'Not recorded';
       el.rAssignee.textContent = t.assigned_to || 'Assign করা হয়নি';
       el.rEmail.textContent = emp.Email || '—';
       el.rStatus.className = `inline-flex rounded-full px-3 py-1 text-xs font-bold ${theme.badge}`;
@@ -2117,32 +2137,32 @@
 
       el.assistantTitle.textContent = tasksMode ? 'Task Assistant' : 'Ticket Assistant';
       el.assistantDemoFlow.textContent = tasksMode
-        ? '1. Task details  →  2. Given by (optional)  →  3. Assign to'
+        ? '1. Task details  →  2. optional assignee  →  3. Assign to'
         : '1. Employee name  →  2. Problem  →  3. Assign by name';
       el.assistantDemoMessage.textContent = tasksMode
-        ? 'Given by Mabubul. Training room printer setup korte hobe. Assign to Towhedul Islam.'
+        ? 'Training room printer setup korte hobe. Assign to Towhedul Islam.'
         : 'Sumaiya Islam-er laptop-e internet nei. Assign to Rupok Kumar Roy.';
       el.assistantSubtitle.textContent = tasksMode
-        ? 'Task details → optional Given by → assign to (defaults to IT Team)'
+        ? 'Task details → optional assignee → assign to (defaults to IT Team)'
         : 'Employee name → problem → assign by name';
-      el.assistantInput.placeholder = tasksMode ? 'Describe the task; Given by and Assign to are optional…' : 'Ask Ticket Assistant…';
+      el.assistantInput.placeholder = tasksMode ? 'Describe the task; only Assign to is optional…' : 'Ask Ticket Assistant…';
       el.assistantPreviewNotice.textContent = assistantAIEnabled
         ? ''
         : tasksMode
-          ? 'Text chat works with the built-in parser. Given by defaults to Md. Tanvir Ahamed Sarkar and an omitted assignee goes to IT Team.'
+          ? 'Text chat works with the built-in parser. Your signed-in account is Given by; an omitted assignee goes to IT Team.'
           : 'Text chat works with the built-in parser. Give the employee name, describe any issue, then choose an assignee.';
       el.assistantPreviewNotice.classList.toggle('hidden', !assistantEnabled || assistantAIEnabled);
       el.assistantMessages.replaceChildren();
       const welcomeMessage = tasksMode
-        ? 'Hello! Describe the task in your own words. Given by defaults to Md. Tanvir Ahamed Sarkar, and without an individual assignee it goes to IT Team.'
+        ? 'Hello! Describe the task in your own words. Your signed-in account is recorded as Given by; without an individual assignee it goes to IT Team.'
         : 'Hello! Tell me the employee name and issue, then mention who to assign it to.';
       assistantConversation.push({ role: 'assistant', content: welcomeMessage });
       appendAssistantMessage('assistant', welcomeMessage);
       el.assistantMessages.append(el.assistantPreviewNotice);
 
       const taskPrompts = [
-        ['Given by: Jaber. Task details: Prepare a laptop for Sumaiya. Assign to Towhedul Islam.', 'Given by · laptop setup · Towhedul'],
-        ['Given by: Mabubul. Task details: Configure the training room printer. Assign to Rupok Kumar Roy.', 'Given by · printer setup · Rupok'],
+        ['Task details: Prepare a laptop for Sumaiya. Assign to Towhedul Islam.', 'Laptop setup · Towhedul'],
+        ['Task details: Configure the training room printer. Assign to Rupok Kumar Roy.', 'Printer setup · Rupok'],
       ];
       document.querySelectorAll('[data-assistant-prompt]').forEach((button, index) => {
         if (tasksMode) {
@@ -2155,7 +2175,7 @@
         }
       });
       el.assistantStatus.textContent = tasksMode
-        ? (assistantEnabled ? (assistantAIEnabled ? 'Task chat ready · task details first; Given by and Assign to have defaults.' : 'Built-in task chat ready · voice availability is shown above.') : 'Chat service is unavailable. Check the app connection and refresh.')
+        ? (assistantEnabled ? (assistantAIEnabled ? 'Task chat ready · task details first; Given by and Assign to have defaults.' : 'Built-in task chat ready · your signed-in account is shown as Given by.') : 'Chat service is unavailable. Check the app connection and refresh.')
         : (assistantEnabled ? (assistantAIEnabled ? 'Ticket chat ready · create pending tickets by text or voice.' : 'Built-in ticket chat ready · voice availability is shown above.') : 'Chat service is unavailable. Check the app connection and refresh.');
     }
 
@@ -2319,27 +2339,17 @@
           }
         }
       }
-      return { createdBy: createdBy || 'Md. Tanvir Ahamed Sarkar', description };
+      return { createdBy: createdBy || 'Not recorded', description };
     }
 
     function taskCreatorSelect(task) {
       const select = document.createElement('select');
       select.className = 'task-inline-select';
       select.setAttribute('aria-label', `Given by for ${task.title}`);
-      const display = taskDisplayFields(task);
-      const current = display.createdBy;
-      if (!current) {
-        const missing = new Option('Not recorded', '');
-        missing.disabled = true;
-        select.append(missing);
-      } else if (!taskAssignees.includes(current)) {
-        select.append(new Option(`${current} (current)`, current));
-      }
-      taskAssignees.forEach((name) => select.append(new Option(name, name)));
+      const current = taskDisplayFields(task).createdBy;
+      select.append(new Option(current, current));
       select.value = current;
-      select.addEventListener('change', () => {
-        if (select.value) updateTask(task.id, { created_by: select.value, description: display.description }, select);
-      });
+      select.disabled = true;
       return select;
     }
 
@@ -2431,6 +2441,8 @@
       editingTaskId = null;
       el.taskCreatedByInput.querySelectorAll('[data-task-legacy]').forEach((option) => option.remove());
       el.taskForm.reset();
+      if (signedInCreatorName) setTaskCreatorValue(signedInCreatorName);
+      el.taskCreatedByInput.disabled = true;
       el.taskCreatorCustomInput.value = '';
       el.taskCreatorCustomInput.required = false;
       el.taskCreatorCustomWrap.classList.add('hidden');
@@ -2468,6 +2480,7 @@
       el.taskCreatorCustomWrap.classList.add('hidden');
       el.taskDescriptionInput.value = display.description;
       setTaskCreatorValue(display.createdBy);
+      el.taskCreatedByInput.disabled = true;
       el.taskAssigneeInput.value = task.assigned_to || 'IT Team';
       el.taskFormTitle.textContent = 'Edit task';
       el.taskSubmitButton.textContent = 'Save changes';
@@ -2498,7 +2511,7 @@
       el.taskFormError.classList.add('hidden');
       const payload = {
         description: el.taskDescriptionInput.value.trim(),
-        created_by: (el.taskCreatedByInput.value === '__other__' ? el.taskCreatorCustomInput.value : el.taskCreatedByInput.value).trim(),
+        created_by: signedInCreatorName || el.taskCreatedByInput.value.trim(),
         assigned_to: el.taskAssigneeInput.value,
       };
       el.taskSubmitButton.disabled = true;
@@ -2508,13 +2521,13 @@
         const url = editing ? `/api/tasks/${editingTaskId}` : '/api/tasks';
         const { ok, data } = await api(url, { method: editing ? 'PATCH' : 'POST', body: JSON.stringify(payload) });
         if (!ok) throw new Error(data.error || 'Task could not be saved.');
-        const nextCreatedBy = editing ? '' : payload.created_by;
+        const nextCreatedBy = editing ? '' : (data.task?.created_by || signedInCreatorName || payload.created_by);
         const nextAssignee = editing ? '' : payload.assigned_to;
         resetTaskForm();
         if (nextCreatedBy) setTaskCreatorValue(nextCreatedBy);
         if (nextAssignee) el.taskAssigneeInput.value = nextAssignee;
         await loadTaskBoard();
-        showToast(editing ? 'Task changes saved.' : 'Task created. Requester and assignee kept for the next task.', 'info');
+        showToast(editing ? 'Task changes saved.' : 'Task created. Your account and assignee are ready for the next task.', 'info');
         if (!editing) el.taskDescriptionInput.focus({ preventScroll: true });
       } catch (error) {
         el.taskFormError.textContent = error.message || 'Task could not be saved.';
@@ -2545,7 +2558,7 @@
     el.taskCreateOpenButton.addEventListener('click', () => {
       if (editingTaskId !== null) resetTaskForm();
       el.taskForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      window.setTimeout(() => el.taskCreatedByInput.focus({ preventScroll: true }), 280);
+      window.setTimeout(() => el.taskDescriptionInput.focus({ preventScroll: true }), 280);
     });
     el.taskSearchInput.addEventListener('input', () => {
       clearTimeout(taskSearchTimer);
@@ -2692,6 +2705,7 @@
     el.newTicketBtn.addEventListener('click', resetForm);
 
     // শুরুতে
+    loadCurrentUser();
     loadPending();
     loadDashboard();
     loadAssistantStatus();

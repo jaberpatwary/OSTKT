@@ -14,7 +14,7 @@ type taskRecord struct {
 	ID          uint   `gorm:"primaryKey"`
 	Title       string `gorm:"size:160;not null;index"`
 	Description string `gorm:"type:text"`
-	CreatedBy   string `gorm:"size:100;not null;default:'';index"`
+	CreatedBy   string `gorm:"size:256;not null;default:'';index"`
 	AssignedTo  string `gorm:"size:100;index"`
 	Priority    string `gorm:"size:16;not null;default:medium;index"`
 	DueDate     string `gorm:"size:10;index"`

@@ -103,6 +103,7 @@
               <th scope="col" class="px-4 py-3">Asset tag</th>
               <th scope="col" class="px-4 py-3">Priority / SLA</th>
               <th scope="col" class="px-4 py-3">Assignee</th>
+              <th scope="col" class="px-4 py-3">Created by</th>
               <th scope="col" class="px-4 py-3">তৈরির সময়</th>
               <th scope="col" class="px-4 py-3">Status</th>
               <th scope="col" class="px-4 py-3 text-right">Action</th>
@@ -191,7 +192,8 @@
           const created = new Date(ticket.created_at);
           const createdLabel = Number.isNaN(created.getTime()) ? '—' : dateFmt.format(created);
           const problem = document.createElement('p'); problem.className = 'mt-0.5 line-clamp-2 text-xs text-slate-500'; problem.textContent = (ticket.ticket_number || '') + ' · ' + createdLabel + ' · ' + (ticket.problem || 'No description');
-          info.append(employee, problem);
+          const creator = document.createElement('p'); creator.className = 'mt-0.5 truncate text-xs text-slate-500'; creator.textContent = 'Created by: ' + (ticket.created_by || 'Not recorded');
+          info.append(employee, problem, creator);
           const button = document.createElement('button'); button.type = 'button'; button.className = 'shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60'; button.textContent = 'Done করুন';
           button.addEventListener('click', () => markDone(ticket, button));
           item.append(info, button); list.append(item);
@@ -209,7 +211,7 @@
       const visible = tickets.filter((ticket) => {
         const employee = ticket.employee || {};
         const matchesStatus = !status || ticket.status === status;
-        const haystack = [ticket.ticket_number, employee.Name, employee.EmployeeID, employee.Department, ticket.problem, ticket.priority]
+        const haystack = [ticket.ticket_number, employee.Name, employee.EmployeeID, employee.Department, ticket.problem, ticket.priority, ticket.created_by]
           .filter(Boolean).join(' ').toLocaleLowerCase();
         return matchesStatus && (!query || haystack.includes(query));
       });
@@ -335,7 +337,8 @@
         } else {
           assigneeCell.append(assignment);
         }
-        row.append(ticketCell, employeeCell, cell(employee.Department), problemCell, assetCell, priorityCell, assigneeCell, cell(date), statusCell, actionCell);
+        const creatorCell = cell(ticket.created_by || 'Not recorded', 'px-4 py-3 text-slate-600');
+        row.append(ticketCell, employeeCell, cell(employee.Department), problemCell, assetCell, priorityCell, assigneeCell, creatorCell, cell(date), statusCell, actionCell);
         rows.append(row);
       }
       $('emptyState').classList.toggle('hidden', visible.length !== 0);

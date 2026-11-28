@@ -2,7 +2,10 @@ package httpapi
 
 import (
 	"errors"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 
 	"ticket-system/internal/adapter/groq"
 	"ticket-system/internal/domain"
@@ -73,5 +76,34 @@ func TestRelevantAssistantEmployeesIgnoresAssistantText(t *testing.T) {
 	}
 	if got := relevantAssistantEmployees(messages, employees, 8); len(got) != 0 {
 		t.Fatalf("relevantAssistantEmployees() = %#v, want no candidates", got)
+	}
+}
+
+func TestCurrentCreatorNameUsesSignedInIdentity(t *testing.T) {
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest("POST", "/api/tasks", nil)
+	ctx.Set(authenticatedUserKey, domain.User{Username: "jaber", DisplayName: "Jaber Patwary"})
+
+	if got := currentCreatorName(ctx); got != "Jaber Patwary" {
+		t.Fatalf("currentCreatorName() = %q, want display name", got)
+	}
+}
+
+func TestCurrentCreatorNameFallsBackToBasicAuthUsername(t *testing.T) {
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest("POST", "/api/tickets", nil)
+	ctx.Request.SetBasicAuth("jaber", "secret")
+
+	if got := currentCreatorName(ctx); got != "jaber" {
+		t.Fatalf("currentCreatorName() = %q, want Basic Auth username", got)
+	}
+}
+
+func TestCurrentCreatorNameMarksUnauthenticatedRequests(t *testing.T) {
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest("POST", "/api/tickets", nil)
+
+	if got := currentCreatorName(ctx); got != "Anonymous user" {
+		t.Fatalf("currentCreatorName() = %q, want anonymous marker", got)
 	}
 }

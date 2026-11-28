@@ -28,7 +28,7 @@ func TestTicketRepositoryPersistsPausedSLAAndAdjustedDueTime(t *testing.T) {
 	}
 	ctx := context.Background()
 	due := time.Now().UTC().Add(3 * time.Hour).Truncate(time.Second)
-	ticket := domain.Ticket{EmployeeName: "Test User", Problem: "VPN is disconnected", AssetTag: "AST-000123", Priority: "medium", SLADueAt: due, Status: domain.StatusPending}
+	ticket := domain.Ticket{EmployeeName: "Test User", Problem: "VPN is disconnected", AssetTag: "AST-000123", CreatedBy: "Test Agent", Priority: "medium", SLADueAt: due, Status: domain.StatusPending}
 	if err := repository.Create(ctx, &ticket); err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestTicketRepositoryPersistsPausedSLAAndAdjustedDueTime(t *testing.T) {
 		t.Fatalf("pause SLA = %v, %v", ok, err)
 	}
 	paused, err := repository.GetByKey(ctx, ticket.TicketNumber)
-	if err != nil || paused.SLAPausedAt == nil || !paused.SLAPausedAt.Equal(pausedAt) || paused.AssetTag != ticket.AssetTag {
+	if err != nil || paused.SLAPausedAt == nil || !paused.SLAPausedAt.Equal(pausedAt) || paused.AssetTag != ticket.AssetTag || paused.CreatedBy != ticket.CreatedBy {
 		t.Fatalf("paused ticket = %#v, %v", paused, err)
 	}
 	resumedDue := due.Add(2 * time.Hour)

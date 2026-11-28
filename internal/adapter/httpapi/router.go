@@ -111,6 +111,7 @@ type ticketView struct {
 	Employee     domain.Employee `json:"employee"`
 	Problem      string          `json:"problem"`
 	AssetTag     string          `json:"asset_tag"`
+	CreatedBy    string          `json:"created_by"`
 	AssignedTo   string          `json:"assigned_to"`
 	Priority     string          `json:"priority"`
 	SLADueAt     time.Time       `json:"sla_due_at"`
@@ -149,7 +150,7 @@ func toTaskView(task domain.Task) taskView {
 func toView(ticket domain.Ticket, emailQueued bool) ticketView {
 	return ticketView{
 		ID: ticket.ID, TicketNumber: ticket.TicketNumber, Employee: ticket.Employee(),
-		Status: ticket.Status, Problem: ticket.Problem, AssetTag: ticket.AssetTag, AssignedTo: ticket.AssignedTo,
+		Status: ticket.Status, Problem: ticket.Problem, AssetTag: ticket.AssetTag, CreatedBy: ticket.CreatedBy, AssignedTo: ticket.AssignedTo,
 		Priority: ticket.Priority, SLADueAt: ticket.SLADueAt, SLAPaused: ticket.SLAPausedAt != nil,
 		EmailQueued: emailQueued, EmailSentAt: ticket.EmailSentAt,
 		CreatedAt: ticket.CreatedAt,
@@ -302,6 +303,9 @@ func newRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 			api.POST("/work/:type/:id/attachments", handler.uploadWorkAttachment)
 			api.GET("/work/:type/:id/attachments/:attachmentID", handler.downloadWorkAttachment)
 		}
+	}
+	if security == nil {
+		api.GET("/auth/me", handler.currentUser)
 	}
 	api.GET("/search", handler.searchEmployees)
 	api.GET("/assistant/status", handler.assistantStatus)
@@ -462,7 +466,10 @@ func (h *Handler) inboundEmail(c *gin.Context) {
 	if len([]rune(problem)) > 2000 {
 		problem = string([]rune(problem)[:2000])
 	}
-	ticket, _, err := h.tickets.Create(c.Request.Context(), usecase.CreateTicketInput{Name: employee.Name, EmployeeID: employee.EmployeeID, Status: domain.StatusPending, Problem: problem})
+	ticket, _, err := h.tickets.Create(c.Request.Context(), usecase.CreateTicketInput{
+		Name: employee.Name, EmployeeID: employee.EmployeeID, Status: domain.StatusPending,
+		Problem: problem, CreatedBy: "Email integration",
+	})
 	if err != nil {
 		_ = h.platform.ReleaseInboundEmail(c.Request.Context(), message.MessageID)
 		log.Printf("email integration ticket creation failed: %v", err)
@@ -1032,11 +1039,16 @@ func (h *Handler) requireRoles(roles ...string) gin.HandlerFunc {
 
 func (h *Handler) currentUser(c *gin.Context) {
 	user, ok := currentAuthenticatedUser(c)
-	if !ok {
-		c.AbortWithStatus(http.StatusUnauthorized)
+	if ok {
+		c.JSON(http.StatusOK, gin.H{"user": user})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"user": user})
+	username, _, basicAuth := c.Request.BasicAuth()
+	if basicAuth && strings.TrimSpace(username) != "" {
+		c.JSON(http.StatusOK, gin.H{"user": gin.H{"username": username, "display_name": username}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"user": gin.H{"username": "", "display_name": "Anonymous user"}})
 }
 
 func (h *Handler) listUsers(c *gin.Context) {
@@ -1392,6 +1404,21 @@ func currentAuthenticatedUser(c *gin.Context) (domain.User, bool) {
 	value, ok := c.Get(authenticatedUserKey)
 	user, valid := value.(domain.User)
 	return user, ok && valid
+}
+
+func currentCreatorName(c *gin.Context) string {
+	if user, ok := currentAuthenticatedUser(c); ok {
+		if displayName := strings.TrimSpace(user.DisplayName); displayName != "" {
+			return displayName
+		}
+		if username := strings.TrimSpace(user.Username); username != "" {
+			return username
+		}
+	}
+	if username, _, ok := c.Request.BasicAuth(); ok && strings.TrimSpace(username) != "" {
+		return strings.TrimSpace(username)
+	}
+	return "Anonymous user"
 }
 
 func (h *Handler) auditWrites() gin.HandlerFunc {
@@ -2105,7 +2132,7 @@ func (h *Handler) assistantChat(c *gin.Context) {
 	}
 	ticket, emailQueued, err := h.tickets.Create(c.Request.Context(), usecase.CreateTicketInput{
 		Name: employee.Name, EmployeeID: employee.EmployeeID, Status: domain.StatusPending,
-		Problem: details.Problem, AssignedTo: details.Assignee,
+		Problem: details.Problem, CreatedBy: currentCreatorName(c), AssignedTo: details.Assignee,
 	})
 	if err != nil {
 		h.writeCreateError(c, err)
@@ -2204,11 +2231,10 @@ func (h *Handler) assistantTaskChat(c *gin.Context) {
 	details.Assignee = strings.TrimSpace(details.Assignee)
 	details.Priority = "medium"
 	details.DueDate = ""
-	// Use only user-provided task fields; the AI may help interpret input but
-	// cannot invent missing creator, work details, or assignee values.
+	// Task creation attribution always comes from the authenticated account.
 	details.Title = fallback.Title
 	details.Description = fallback.Description
-	details.CreatedBy = fallback.CreatedBy
+	details.CreatedBy = currentCreatorName(c)
 	details.Assignee = assignee
 	if selected := strings.TrimSpace(request.SelectedAssignee); selected != "" {
 		details.Assignee = resolveTaskAssigneeMention(selected)
@@ -2219,11 +2245,8 @@ func (h *Handler) assistantTaskChat(c *gin.Context) {
 	} else if details.Assignee != "" {
 		details.Assignee = resolveTaskAssigneeMention(details.Assignee)
 	}
-	if details.CreatedBy == "" {
-		details.CreatedBy = usecase.DefaultTaskCreator
-	}
-	if len([]rune(details.CreatedBy)) > 100 {
-		c.JSON(http.StatusOK, gin.H{"reply": "Given by নামটি ১০০ অক্ষরের মধ্যে ছোট করে বলুন।"})
+	if len([]rune(details.CreatedBy)) > 256 {
+		c.JSON(http.StatusOK, gin.H{"reply": "আপনার account display name ২৫৬ অক্ষরের বেশি; admin panel থেকে এটি ছোট করুন।"})
 		return
 	}
 	if details.Description == "" {
@@ -2251,7 +2274,7 @@ func (h *Handler) assistantTaskChat(c *gin.Context) {
 		return
 	}
 	task, err := h.tasks.Create(c.Request.Context(), usecase.CreateTaskInput{
-		Title: details.Title, Description: details.Description, CreatedBy: details.CreatedBy,
+		Title: details.Title, Description: details.Description, CreatedBy: currentCreatorName(c),
 		AssignedTo: details.Assignee, Priority: details.Priority, DueDate: details.DueDate,
 	})
 	if err != nil {
@@ -2440,7 +2463,7 @@ func (h *Handler) createTicket(c *gin.Context) {
 	}
 	ticket, emailQueued, err := h.tickets.Create(c.Request.Context(), usecase.CreateTicketInput{
 		Name: request.Name, EmployeeID: request.EmployeeID, Status: request.Status,
-		Problem: request.Problem, AssetTag: request.AssetTag, AssignedTo: request.AssignedTo, Priority: request.Priority,
+		Problem: request.Problem, AssetTag: request.AssetTag, CreatedBy: currentCreatorName(c), AssignedTo: request.AssignedTo, Priority: request.Priority,
 	})
 	if err != nil {
 		h.writeCreateError(c, err)
@@ -2591,13 +2614,13 @@ func (h *Handler) exportTicketsCSV(c *gin.Context) {
 	for _, ticket := range tickets {
 		rows = append(rows, []string{
 			strconv.FormatUint(uint64(ticket.ID), 10), ticket.TicketNumber, ticket.EmployeeName,
-			ticket.EmployeeID, ticket.Department, ticket.Problem, ticket.AssetTag, ticket.AssignedTo,
+			ticket.EmployeeID, ticket.Department, ticket.Problem, ticket.AssetTag, ticket.CreatedBy, ticket.AssignedTo,
 			ticket.Priority, ticket.SLADueAt.UTC().Format(time.RFC3339), ticket.Status,
 			ticket.CreatedAt.UTC().Format(time.RFC3339),
 		})
 	}
 	filename := "tickets-" + time.Now().UTC().Format("20060102-150405") + ".csv"
-	writeCSVResponse(c, filename, []string{"ID", "Ticket number", "Employee", "Employee ID", "Department", "Problem", "Asset tag", "Assigned to", "Priority", "SLA due (UTC)", "Status", "Created at (UTC)"}, rows)
+	writeCSVResponse(c, filename, []string{"ID", "Ticket number", "Employee", "Employee ID", "Department", "Problem", "Asset tag", "Created by", "Assigned to", "Priority", "SLA due (UTC)", "Status", "Created at (UTC)"}, rows)
 }
 
 type createTaskRequest struct {
@@ -2778,7 +2801,7 @@ func (h *Handler) createTask(c *gin.Context) {
 		}
 	}
 	task, err := h.tasks.Create(c.Request.Context(), usecase.CreateTaskInput{
-		Title: request.Title, Description: request.Description, CreatedBy: request.CreatedBy, AssignedTo: assignee,
+		Title: request.Title, Description: request.Description, CreatedBy: currentCreatorName(c), AssignedTo: assignee,
 		Priority: request.Priority, DueDate: request.DueDate,
 	})
 	if err != nil {
@@ -2816,6 +2839,9 @@ func (h *Handler) updateTask(c *gin.Context) {
 	if getter, ok := h.tasks.(taskGetter); ok {
 		previous, _ = getter.Get(c.Request.Context(), uint(idValue))
 	}
+	// Keep task creator attribution immutable after creation; edits should not
+	// rewrite which signed-in account originally created the task.
+	request.CreatedBy = nil
 	task, err := h.tasks.Update(c.Request.Context(), uint(idValue), usecase.UpdateTaskInput{
 		Title: request.Title, Description: request.Description, CreatedBy: request.CreatedBy, AssignedTo: request.AssignedTo,
 		Priority: request.Priority, DueDate: request.DueDate, Status: request.Status,

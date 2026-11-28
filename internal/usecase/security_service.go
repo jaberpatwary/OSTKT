@@ -19,8 +19,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unicode/utf8"
 
+	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/bcrypt"
 
 	"ticket-system/internal/domain"
@@ -30,19 +30,27 @@ const (
 	RoleAdmin   = "admin"
 	RoleManager = "manager"
 	RoleAgent   = "agent"
+
+	maximumPasswordBytes = 8 << 10
+	argonMemoryKiB       = 64 * 1024
+	argonIterations      = 3
+	argonThreads         = 2
+	argonSaltBytes       = 16
+	argonKeyBytes        = 32
 )
 
 var (
 	ErrInvalidCredentials = errors.New("invalid username or password")
 	ErrInvalidUser        = errors.New("invalid user details")
-	ErrWeakPassword       = errors.New("password must be at least 12 characters and at most 72 bytes")
+	ErrWeakPassword       = errors.New("password is required")
+	ErrPasswordTooLong    = errors.New("password exceeds the 8 KB security limit")
 	ErrLastAdmin          = domain.ErrLastAdmin
 	ErrUsernameTaken      = domain.ErrDuplicateKey
 	ErrInvalidSession     = errors.New("invalid or expired session")
 	ErrMFAUnavailable     = errors.New("MFA encryption is not configured")
 	ErrMFAAlreadyEnabled  = errors.New("MFA is already enabled")
 	ErrMFAInvalidCode     = errors.New("authenticator code is invalid")
-	usernamePattern       = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._@+-]{2,63}$`)
+	usernamePattern       = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._@+-]{0,255}$`)
 )
 
 type SecurityService struct {
@@ -73,11 +81,10 @@ func (s *SecurityService) BootstrapAdmin(ctx context.Context, username, password
 		return nil
 	}
 	username = strings.ToLower(strings.TrimSpace(username))
-	password = strings.TrimSpace(password)
-	if !usernamePattern.MatchString(username) || password == "" || len(password) > 72 {
+	if !usernamePattern.MatchString(username) {
 		return ErrInvalidUser
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := hashPassword(password)
 	if err != nil {
 		return err
 	}
@@ -85,11 +92,11 @@ func (s *SecurityService) BootstrapAdmin(ctx context.Context, username, password
 }
 
 func (s *SecurityService) Authenticate(ctx context.Context, username, password string) (domain.User, error) {
-	if len(password) == 0 || len(password) > 72 {
+	if len(password) == 0 || len(password) > maximumPasswordBytes {
 		return domain.User{}, ErrInvalidCredentials
 	}
 	user, passwordHash, err := s.repository.FindUserByUsername(ctx, username)
-	if err != nil || !user.Active || bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)) != nil {
+	if err != nil || !user.Active || !verifyPassword(passwordHash, password) {
 		return domain.User{}, ErrInvalidCredentials
 	}
 	return user, nil
@@ -327,13 +334,16 @@ func (s *SecurityService) CreateUser(ctx context.Context, input domain.UserInput
 	input.Username = strings.ToLower(strings.TrimSpace(input.Username))
 	input.DisplayName = strings.TrimSpace(input.DisplayName)
 	input.Role = strings.ToLower(strings.TrimSpace(input.Role))
-	if !usernamePattern.MatchString(input.Username) || input.DisplayName == "" || len([]rune(input.DisplayName)) > 120 || !validRole(input.Role) {
+	if !usernamePattern.MatchString(input.Username) || input.DisplayName == "" || len([]rune(input.DisplayName)) > 256 || !validRole(input.Role) {
 		return domain.User{}, ErrInvalidUser
 	}
-	if utf8.RuneCountInString(input.Password) < 12 || len(input.Password) > 72 {
+	if input.Password == "" {
 		return domain.User{}, ErrWeakPassword
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	if len(input.Password) > maximumPasswordBytes {
+		return domain.User{}, ErrPasswordTooLong
+	}
+	hash, err := hashPassword(input.Password)
 	if err != nil {
 		return domain.User{}, err
 	}
@@ -344,15 +354,18 @@ func (s *SecurityService) CreateUser(ctx context.Context, input domain.UserInput
 func (s *SecurityService) UpdateUser(ctx context.Context, id uint, input domain.UserUpdate) (domain.User, error) {
 	input.DisplayName = strings.TrimSpace(input.DisplayName)
 	input.Role = strings.ToLower(strings.TrimSpace(input.Role))
-	if input.DisplayName == "" || len([]rune(input.DisplayName)) > 120 || !validRole(input.Role) {
+	if input.DisplayName == "" || len([]rune(input.DisplayName)) > 256 || !validRole(input.Role) {
 		return domain.User{}, ErrInvalidUser
 	}
 	var passwordHash string
 	if input.Password != "" {
-		if utf8.RuneCountInString(input.Password) < 12 || len(input.Password) > 72 {
+		if len(input.Password) > maximumPasswordBytes {
+			return domain.User{}, ErrPasswordTooLong
+		}
+		if input.Password == "" {
 			return domain.User{}, ErrWeakPassword
 		}
-		hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+		hash, err := hashPassword(input.Password)
 		if err != nil {
 			return domain.User{}, err
 		}
@@ -379,4 +392,42 @@ func validRole(role string) bool {
 	default:
 		return false
 	}
+}
+
+func hashPassword(password string) (string, error) {
+	if len(password) == 0 {
+		return "", ErrWeakPassword
+	}
+	if len(password) > maximumPasswordBytes {
+		return "", ErrPasswordTooLong
+	}
+	salt := make([]byte, argonSaltBytes)
+	if _, err := rand.Read(salt); err != nil {
+		return "", err
+	}
+	hash := argon2.IDKey([]byte(password), salt, argonIterations, argonMemoryKiB, argonThreads, argonKeyBytes)
+	return fmt.Sprintf("$argon2id$v=19$m=%d,t=%d,p=%d$%s$%s",
+		argonMemoryKiB, argonIterations, argonThreads,
+		base64.RawStdEncoding.EncodeToString(salt), base64.RawStdEncoding.EncodeToString(hash)), nil
+}
+
+func verifyPassword(encodedHash, password string) bool {
+	if strings.HasPrefix(encodedHash, "$2") {
+		return len(password) <= 72 && bcrypt.CompareHashAndPassword([]byte(encodedHash), []byte(password)) == nil
+	}
+	parts := strings.Split(encodedHash, "$")
+	if len(parts) != 6 || parts[1] != "argon2id" || parts[2] != "v=19" ||
+		parts[3] != fmt.Sprintf("m=%d,t=%d,p=%d", argonMemoryKiB, argonIterations, argonThreads) {
+		return false
+	}
+	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	if err != nil || len(salt) != argonSaltBytes {
+		return false
+	}
+	expected, err := base64.RawStdEncoding.DecodeString(parts[5])
+	if err != nil || len(expected) != argonKeyBytes {
+		return false
+	}
+	actual := argon2.IDKey([]byte(password), salt, argonIterations, argonMemoryKiB, argonThreads, argonKeyBytes)
+	return subtle.ConstantTimeCompare(actual, expected) == 1
 }

@@ -316,7 +316,7 @@ The Admin Panel is available at `/admin`. Ticket creation accepts a required pro
 
 ## User accounts, roles, and audit history
 
-On first startup, `APP_USER` and `APP_PASS` create the initial administrator only when the database has no user accounts. Passwords are stored as bcrypt hashes. After startup, manage accounts at `/admin/users`; changing the environment variables later does not overwrite database passwords. New accounts require passwords with at least 12 characters.
+On first startup, `APP_USER` and `APP_PASS` create the initial administrator only when the database has no user accounts. New and changed passwords use Argon2id hashes; existing bcrypt hashes remain valid. After startup, manage accounts at `/admin/users`; changing the environment variables later does not overwrite database passwords. Usernames and display names accept up to 256 characters. Passwords can be any non-empty value up to 8 KiB; the UI has no password length cap. Role choices are the supported `admin`, `manager`, and `agent` permissions.
 
 The initial roles are:
 

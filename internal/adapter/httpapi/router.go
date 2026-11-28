@@ -773,7 +773,7 @@ const csrfCookieName = "ost_csrf"
 func (h *Handler) authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, password, ok := c.Request.BasicAuth()
-		if !ok || len(username) > 64 || len(password) > 72 {
+		if !ok || len(username) > 256 || len(password) > 8<<10 {
 			httpAuthChallenge(c)
 			return
 		}
@@ -845,7 +845,7 @@ func (h *Handler) login(c *gin.Context) {
 		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many login attempts; wait 15 minutes and try again"})
 		return
 	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4<<10)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
 	var request loginRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "enter your username and password"})
@@ -1057,6 +1057,7 @@ type createUserRequest struct {
 }
 
 func (h *Handler) createUser(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
 	var request createUserRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user details"})
@@ -1086,6 +1087,7 @@ func (h *Handler) updateUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
 		return
 	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
 	var request updateUserRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user details"})
@@ -1372,7 +1374,7 @@ func (h *Handler) downloadWorkAttachment(c *gin.Context) {
 
 func writeSecurityError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, usecase.ErrInvalidUser), errors.Is(err, usecase.ErrWeakPassword):
+	case errors.Is(err, usecase.ErrInvalidUser), errors.Is(err, usecase.ErrWeakPassword), errors.Is(err, usecase.ErrPasswordTooLong):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case errors.Is(err, usecase.ErrUsernameTaken):
 		c.JSON(http.StatusConflict, gin.H{"error": "username is already in use"})

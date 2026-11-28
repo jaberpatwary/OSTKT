@@ -32,9 +32,9 @@
     <p class="sub" id="welcomeSubtitle">Sign in to your service desk workspace.</p>
     <form id="loginForm">
       <label for="username" id="usernameLabel">Username</label>
-      <input id="username" name="username" autocomplete="username" required maxlength="64" autofocus />
+      <input id="username" name="username" autocomplete="username" required autofocus />
       <label for="password" id="passwordLabel">Password</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="72" />
+      <input id="password" name="password" type="password" autocomplete="current-password" required />
       <label for="otpCode"><span id="authCodeLabel">Authenticator code</span> <span id="mfaHint" style="font-weight:400;color:#8493aa">(if MFA is enabled)</span></label>
       <input id="otpCode" name="otp_code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" />
       <button id="submitButton" type="submit" data-state="idle">Sign in</button>

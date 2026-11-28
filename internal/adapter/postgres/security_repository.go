@@ -15,10 +15,10 @@ import (
 
 type userRecord struct {
 	ID           uint   `gorm:"primaryKey"`
-	Username     string `gorm:"size:64;not null;uniqueIndex"`
-	DisplayName  string `gorm:"size:120;not null"`
+	Username     string `gorm:"size:256;not null;uniqueIndex"`
+	DisplayName  string `gorm:"size:256;not null"`
 	Role         string `gorm:"size:20;not null;index"`
-	PasswordHash string `gorm:"size:100;not null"`
+	PasswordHash string `gorm:"size:255;not null"`
 	Active       bool   `gorm:"not null;default:true;index"`
 	MFASecret    string `gorm:"size:512;not null;default:''"`
 	MFAEnabled   bool   `gorm:"not null;default:false"`
@@ -39,7 +39,7 @@ func (r userRecord) toDomain() domain.User {
 type auditRecord struct {
 	ID         uint      `gorm:"primaryKey"`
 	UserID     uint      `gorm:"index"`
-	Username   string    `gorm:"size:64;not null;index"`
+	Username   string    `gorm:"size:256;not null;index"`
 	Role       string    `gorm:"size:20;not null;index"`
 	Action     string    `gorm:"size:12;not null;index"`
 	Resource   string    `gorm:"size:240;not null"`

@@ -241,7 +241,10 @@ func newRouter(tickets TicketUseCase, healthCheck func(context.Context) error, c
 	site := router.Group("/")
 	if security != nil {
 		site.Use(handler.sessionAuthentication())
-		site.GET("/login", func(c *gin.Context) { c.File("./static/login.html") })
+		site.GET("/login", func(c *gin.Context) {
+			c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
+			c.File("./static/login.html")
+		})
 		site.GET("/account/security", func(c *gin.Context) { c.File("./static/account-security.html") })
 		site.POST("/api/auth/login", handler.login)
 		log.Println("Database-backed cookie session authentication enabled")

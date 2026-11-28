@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" translate="no">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -8,7 +8,8 @@
   <style>
     :root{color-scheme:dark;font-family:Manrope,Inter,Segoe UI,sans-serif;background:#0b1220;color:#e8eefc}
     *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at 15% 10%,#244070 0,transparent 42%),radial-gradient(ellipse at 90% 95%,#123d42 0,transparent 38%),#0b1220}
-    .card{width:min(440px,100%);padding:34px;border:1px solid #324260;border-radius:24px;background:#121d30eF;box-shadow:0 28px 90px #020617aa;backdrop-filter:blur(14px)}
+    .card{width:min(440px,100%);padding:30px 34px 34px;border:1px solid #324260;border-radius:24px;background:#121d30eF;box-shadow:0 28px 90px #020617aa;backdrop-filter:blur(14px)}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px}.language{height:36px;border:1px solid #3a4a67;border-radius:10px;background:#0c1526;padding:0 10px;color:#dbe6f8;font:600 12px Inter,Segoe UI,sans-serif;cursor:pointer}
     .mark{display:grid;place-items:center;width:52px;height:52px;border-radius:17px;background:linear-gradient(135deg,#6366f1,#0ea5a6);font-size:26px}
     h1{margin:22px 0 4px;font-size:26px;letter-spacing:-.04em}.sub{margin:0 0 26px;color:#9eacc3;font-size:13px}
     label{display:block;margin:16px 0 7px;color:#cbd6e8;font-size:12px;font-weight:700}
@@ -20,40 +21,73 @@
 </head>
 <body>
   <main class="card">
-    <div class="mark" aria-hidden="true">✦</div>
-    <h1>Welcome back</h1>
-    <p class="sub">Sign in to your service desk workspace.</p>
+    <div class="topbar">
+      <div class="mark" aria-hidden="true">✦</div>
+      <select class="language" id="languageSelect" aria-label="Language">
+        <option value="en">English</option>
+        <option value="bn">বাংলা</option>
+      </select>
+    </div>
+    <h1 id="welcomeTitle">Welcome back</h1>
+    <p class="sub" id="welcomeSubtitle">Sign in to your service desk workspace.</p>
     <form id="loginForm">
-      <label for="username">Username</label>
+      <label for="username" id="usernameLabel">Username</label>
       <input id="username" name="username" autocomplete="username" required maxlength="64" autofocus />
-      <label for="password">Password</label>
+      <label for="password" id="passwordLabel">Password</label>
       <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="72" />
-      <label for="otpCode">Authenticator code <span style="font-weight:400;color:#8493aa">(if MFA is enabled)</span></label>
+      <label for="otpCode"><span id="authCodeLabel">Authenticator code</span> <span id="mfaHint" style="font-weight:400;color:#8493aa">(if MFA is enabled)</span></label>
       <input id="otpCode" name="otp_code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" />
-      <button id="submitButton" type="submit">Sign in</button>
+      <button id="submitButton" type="submit" data-state="idle">Sign in</button>
       <p id="loginError" class="error" role="alert" aria-live="polite"></p>
     </form>
-    <p class="foot">Auto Ticket System · Authorized team members only</p>
+    <p class="foot" id="footerText">Auto Ticket System · Authorized team members only</p>
   </main>
   <script>
     (() => {
       const form = document.getElementById('loginForm');
       const button = document.getElementById('submitButton');
       const error = document.getElementById('loginError');
+      const languageSelect = document.getElementById('languageSelect');
+      const translations = {
+        en: { title: 'Sign in · Auto Ticket System', welcome: 'Welcome back', subtitle: 'Sign in to your service desk workspace.', language: 'Language', username: 'Username', password: 'Password', authCode: 'Authenticator code', mfaHint: '(if MFA is enabled)', submit: 'Sign in', signing: 'Signing in…', footer: 'Auto Ticket System · Authorized team members only', failed: 'Could not sign in.' },
+        bn: { title: 'সাইন ইন · Auto Ticket System', welcome: 'আবার স্বাগতম', subtitle: 'আপনার সার্ভিস ডেস্কে সাইন ইন করুন।', language: 'ভাষা', username: 'ইউজারনেম', password: 'পাসওয়ার্ড', authCode: 'অথেন্টিকেটর কোড', mfaHint: '(MFA চালু থাকলে)', submit: 'সাইন ইন', signing: 'সাইন ইন হচ্ছে…', footer: 'Auto Ticket System · শুধু অনুমোদিত টিম সদস্যদের জন্য', failed: 'সাইন ইন করা যায়নি।' }
+      };
+      const setLanguage = (language) => {
+        const selected = translations[language] ? language : 'en';
+        const t = translations[selected];
+        document.documentElement.lang = selected;
+        document.title = t.title;
+        document.getElementById('welcomeTitle').textContent = t.welcome;
+        document.getElementById('welcomeSubtitle').textContent = t.subtitle;
+        languageSelect.setAttribute('aria-label', t.language);
+        document.getElementById('usernameLabel').textContent = t.username;
+        document.getElementById('passwordLabel').textContent = t.password;
+        document.getElementById('authCodeLabel').textContent = t.authCode;
+        document.getElementById('mfaHint').textContent = t.mfaHint;
+        document.getElementById('footerText').textContent = t.footer;
+        if (button.dataset.state === 'idle') button.textContent = t.submit;
+        languageSelect.value = selected;
+        try { localStorage.setItem('ost-login-language', selected); } catch (_) {}
+      };
+      try {
+        const savedLanguage = localStorage.getItem('ost-login-language');
+        setLanguage(savedLanguage && translations[savedLanguage] ? savedLanguage : 'en');
+      } catch (_) { setLanguage('en'); }
+      languageSelect.addEventListener('change', () => setLanguage(languageSelect.value));
       form.addEventListener('submit', async (event) => {
-        event.preventDefault(); error.textContent = ''; button.disabled = true; button.textContent = 'Signing in…';
+        event.preventDefault(); error.textContent = ''; button.disabled = true; button.dataset.state = 'busy'; button.textContent = translations[languageSelect.value].signing;
         try {
           const response = await fetch('/api/auth/login', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: document.getElementById('username').value, password: document.getElementById('password').value, otp_code: document.getElementById('otpCode').value })
           });
           const data = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(data.error || 'Could not sign in.');
+          if (!response.ok) throw new Error(data.error || translations[languageSelect.value].failed);
           const next = new URLSearchParams(location.search).get('next') || '/dashboard';
           location.replace(next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard');
         } catch (err) {
-          error.textContent = err.message || 'Could not sign in.';
-          button.disabled = false; button.textContent = 'Sign in';
+          error.textContent = err.message || translations[languageSelect.value].failed;
+          button.disabled = false; button.dataset.state = 'idle'; button.textContent = translations[languageSelect.value].submit;
         }
       });
     })();
